@@ -94,4 +94,4 @@ Built with:
 
 ## 👨‍💻 Built for HiDevs × Mastra Hackathon 2026
 
-*Synaptiq — Because no student should ever feel alone while studying.*
+*Synaptiq — Every doubt deserves more than a generic answer. Learn smarter.*
