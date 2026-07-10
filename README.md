@@ -7,6 +7,8 @@
 ![Enkrypt AI](https://img.shields.io/badge/Safety-Enkrypt%20AI-blue?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?style=flat-square)
 
+**CBSE (NCERT) + ICSE (CISCE) · Classes 6–12 · All streams**
+
 ---
 
 ## 🎯 The Problem
@@ -21,53 +23,40 @@ The result? Surface-level learning that collapses under exam pressure.
 
 Synaptiq is a production-grade, multi-agent AI tutoring system built entirely on **Mastra** that goes beyond answering questions — it understands *how* you think, remembers *where* you've struggled, and meets you exactly where you are.
 
+Supports **CBSE** and **ICSE** boards with board-aware syllabus retrieval, subject tabs (including ICSE History & Civics / Geography split), exam-style question generation, and Quick Challenge mastery tracking.
+
 ---
 
-## 🤖 7 Specialized Mastra Agents
+## 🤖 Mastra Agents & Pipeline
 
 | Agent | Role |
 |---|---|
-| **Tutor Agent** | Adapts explanations from ELI5 → Expert based on proficiency score |
-| **Gap Tracker Agent** | Monitors wrong answers and builds a live knowledge gap report |
-| **Resurface Agent** | Proactively nudges students using Ebbinghaus forgetting curve |
-| **Quiz Agent** | Generates Socratic follow-up questions to reinforce understanding |
-| **Teacher Oversight Agent** | Aggregates class-wide gaps for educator dashboards |
-| **Vision AI Agent** | Parses handwritten notes and diagrams via GPT-4o Vision |
-| **Sentiment Analysis Agent** | Detects frustration/confusion and adjusts tone in real time |
+| **Tutor Agent** | Step-by-step explanations grounded in syllabus (Groq LLM) |
+| **Syllabus Retriever** | Qdrant vector search filtered by board, class, subject |
+| **Quick Check Evaluator** | Grades short follow-up answers in Quick Challenge |
+| **synaptiq-doubt-pipeline** | Mastra workflow: retrieve → tutor → Enkrypt verify |
 
 ---
 
-## ⚡ Key Differentiators
+## ⚡ Key Features
 
-- 🧬 **Prerequisite Gap Detector** — teaches foundations before advanced concepts
-- 📉 **Ebbinghaus Forgetting Curve** — mastery scores decay and trigger review nudges
-- 🎓 **Bloom's Taxonomy Classifier** — calibrates explanation depth per query
-- 📊 **XGBoost Weak Topic Predictor** — predicts future struggle areas proactively
-- 🔄 **GraphRAG + Self-RAG** — multi-hop concept retrieval over Neo4j knowledge graph
-- 🎯 **PPO Curriculum Sequencer** — RL agent finds optimal concept teaching order
-- 🛡️ **Enkrypt AI Dual Safety Layer** — filters hallucinations at both RAG and LLM output stage
+- 📚 **Board-aware** — CBSE (NCERT) and ICSE (CISCE) with separate junior subject layouts
+- 🔍 **Qdrant retrieval** — syllabus corpus with board/class/subject filters
+- 📝 **Exam-style questions** — practice questions with mark allocation, not just explanations
+- 🛡️ **Enkrypt AI safety** — hallucination and curriculum adherence checks
+- 🎯 **Quick Challenge** — short quiz after each answer with mastery tracking
+- 📐 **STEM solver** — deterministic math/science steps for common problem types
 
 ---
 
 ## 🏗️ Architecture
 
 Built with:
-- **Mastra** — multi-agent orchestration + 3 workflow automations
-- **Qdrant Cloud** — semantic vector memory (HNSW + BM25 hybrid)
-- **Neo4j Aura** — knowledge graph for concept prerequisite chains
-- **Enkrypt AI** — hallucination detection + curriculum safety filter
-- **PostgreSQL (Supabase)** — student knowledge graph + mastery tracking
-- **Redis (Upstash)** — session cache + rate limiting
-- **Langfuse** — full agent trace observability
-- **React + TypeScript + Tailwind CSS** — student chat UI + progress dashboard
-
----
-
-## 🔄 3 Mastra Workflow Automations
-
-1. **onStudentQuery** — real-time doubt resolution pipeline
-2. **dailyResurface** — cron-triggered spaced repetition nudges
-3. **postSession** — knowledge graph update + forgetting curve reset
+- **Mastra** — multi-agent orchestration + `synaptiq-doubt-pipeline` workflow
+- **Qdrant Cloud** — semantic vector memory via `@mastra/qdrant`
+- **Enkrypt AI** — safety verification before answer delivery
+- **Groq** — Llama 3.3 70B (tutor) + Llama 3.1 8B (quick check)
+- **React + Vite** — student chat UI with board/class/stream selectors
 
 ---
 
@@ -76,19 +65,66 @@ Built with:
 | Layer | Technology |
 |---|---|
 | Agent Framework | Mastra, TypeScript, Node.js |
-| LLM Providers | Claude-3.5-Sonnet, GPT-4o-mini |
+| LLM | Groq (Llama 3.3 70B / 3.1 8B) |
 | AI Safety | Enkrypt AI |
-| Vector Store | Qdrant Cloud |
-| Knowledge Graph | Neo4j Aura |
-| Database | PostgreSQL, Supabase, Prisma |
-| Cache | Redis, Upstash |
-| ML Models | XGBoost, RoBERTa, PPO |
-| Voice AI | Whisper + ElevenLabs |
-| Vision AI | GPT-4o Vision |
-| Observability | Langfuse |
-| Frontend | React, Tailwind CSS, Recharts |
-| Notifications | Firebase Cloud Messaging, Twilio |
-| Deployment | Vercel + Railway |
+| Vector Store | Qdrant Cloud (`@mastra/qdrant`) |
+| Backend | Node.js + Express |
+| Frontend | React + Vite |
+
+---
+
+## Quick start
+
+**Project folder:** `Mastra-Hackathon`
+
+### PowerShell (Windows)
+
+```powershell
+cd D:\mastra\Mastra-Hackathon
+
+# Backend (terminal 1)
+cd backend; npm install; npm run dev
+
+# Frontend (terminal 2)
+cd D:\mastra\Mastra-Hackathon\frontend; npm install; npm run dev
+```
+
+Open http://localhost:5173 — backend at http://localhost:3001
+
+### Bash / macOS / Linux
+
+```bash
+cd Mastra-Hackathon/backend
+cp .env.example .env
+# Add GROQ_API_KEY, QDRANT_URL, ENKRYPTAI_API_KEY
+npm install
+npm run seed:qdrant
+npm run dev
+```
+
+### Strict stack (hackathon)
+
+Every doubt runs through the **Mastra `synaptiq-doubt-pipeline` workflow**:
+
+1. **Qdrant** — syllabus retrieval (board + class + subject filtered)
+2. **Mastra Tutor agent** — grounded explanation
+3. **Enkrypt AI** — live guardrails before delivery
+
+Check live status: `GET /health` → `stack.ready`
+
+| Env | Purpose |
+|-----|---------|
+| `STRICT_STACK_MODE=true` | Require sponsor integrations (default) |
+| `ALLOW_CORPUS_FALLBACK=false` | Qdrant-only retrieval (default) |
+| `USE_ENKRYPT_STUB=false` | Live Enkrypt API (set `ENKRYPTAI_API_KEY`) |
+
+### POST /ask
+
+```bash
+curl -N -X POST http://localhost:3001/ask \
+  -H "Content-Type: application/json" \
+  -d '{"doubt":"Explain nationalism in India","boardId":"cbse","subjectId":"social","classLevel":10}'
+```
 
 ---
 

@@ -1,0 +1,12 @@
+{
+  "name": "synaptiq",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix backend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "test:sponsor": "npm run test:sponsor --prefix backend"
+  }
+}
