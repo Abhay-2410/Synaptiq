@@ -2,13 +2,21 @@ import { tutorAgent } from '../../agents/index.js';
 import { getLlmProvider, isLlmProviderConfigured } from '../../agents/llm-provider.js';
 import { logStageEnd, logStageStart, logStageWarn } from '../lib/pipeline-log.js';
 import { withTimeout } from '../lib/with-timeout.js';
+import {
+  buildFollowUpInstructions,
+  formatConversationHistory,
+  isFollowUpRequest,
+  trimConversationHistory,
+} from './conversation-context.js';
 import { resolveAnswerMode } from './chunk-focus.js';
 import { buildLocalReasoningSteps, detectIntent, generateLocalTutorDraft } from './local-tutor.js';
+import { tryFollowUpAnswer } from './follow-up-answer.js';
 import { trySolveStemProblem } from './stem-solve.js';
 import { tutorModeInstructions } from './tutor-synthesis.js';
 import { isExamQuestionRequest } from './exam-question.js';
 import { studentBoardPhrase, getBoardMeta } from '../curriculum/boards.js';
 import { enhanceRawMathMarkdown } from './raw-math/enhance-steps.js';
+import { tryCuratedConceptAnswer } from './tutor-knowledge.js';
 import type { DoubtRequest, ReasoningStep, RetrievedChunk, TutorDraft } from '../types.js';
 
 const TUTOR_LLM_TIMEOUT_MS = Number(process.env.TUTOR_LLM_TIMEOUT_MS) || 25_000;
@@ -39,6 +47,41 @@ export async function generateTutorDraft(
       model: 'synaptiq-stem-solver',
     };
     logStageEnd('tutor-stem', `answerLen=${draft.answer.length}`);
+    return draft;
+  }
+
+  const followUpDraft = tryFollowUpAnswer(doubt);
+  if (followUpDraft) {
+    logStageStart('tutor-follow-up', 'worked examples for prior questions');
+    if (handlers.onChunk) {
+      const chunkSize = 48;
+      for (let i = 0; i < followUpDraft.answer.length; i += chunkSize) {
+        handlers.onChunk(followUpDraft.answer.slice(i, i + chunkSize));
+      }
+    }
+    const draft: TutorDraft = {
+      ...followUpDraft,
+      model: 'synaptiq-follow-up',
+    };
+    logStageEnd('tutor-follow-up', `answerLen=${draft.answer.length}`);
+    return draft;
+  }
+
+  const curated = tryCuratedConceptAnswer(doubt);
+  if (curated) {
+    logStageStart('tutor-curated', 'precise built-in concept answer');
+    if (handlers.onChunk) {
+      const chunkSize = 48;
+      for (let i = 0; i < curated.length; i += chunkSize) {
+        handlers.onChunk(curated.slice(i, i + chunkSize));
+      }
+    }
+    const draft: TutorDraft = {
+      answer: curated,
+      reasoningSteps: buildLocalReasoningSteps(doubt, context, detectIntent(doubt.text)),
+      model: 'synaptiq-curated',
+    };
+    logStageEnd('tutor-curated', `answerLen=${draft.answer.length}`);
     return draft;
   }
 
@@ -122,8 +165,10 @@ async function streamTutorDraft(
 
 function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): string {
   const mode = resolveAnswerMode(doubt, context);
-  const modeBlock = tutorModeInstructions(mode, doubt.classLevel);
+  const intent = detectIntent(doubt.text);
+  const modeBlock = tutorModeInstructions(mode, doubt.classLevel, intent);
   const examQuestion = isExamQuestionRequest(doubt.text);
+  const history = trimConversationHistory(doubt.priorMessages);
 
   const contextBlock =
     context.length > 0
@@ -135,7 +180,21 @@ function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): strin
           .join('\n\n')
       : `No retrieved excerpts for this query — answer fully from accurate ${getBoardMeta(doubt.boardId ?? 'cbse').syllabus}-aligned knowledge for the student's class and subject. Do not mention missing material.`;
 
-  return [
+  const blocks: string[] = [];
+
+  if (history.length > 0) {
+    blocks.push(
+      '--- Conversation so far (use for follow-ups) ---',
+      formatConversationHistory(history),
+      '--- End conversation ---',
+      '',
+    );
+    if (isFollowUpRequest(doubt.text)) {
+      blocks.push(buildFollowUpInstructions(doubt.text, history), '');
+    }
+  }
+
+  blocks.push(
     'Student doubt:',
     doubt.text,
     '',
@@ -143,21 +202,39 @@ function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): strin
     `Selected subject: ${doubt.subjectId ?? 'unknown'}`,
     `Selected stream: ${doubt.stream ?? 'n/a'}`,
     `Answer mode: ${mode}`,
+    `Question intent: ${intent}`,
     '',
-    ...(examQuestion
-      ? [
-          'REQUEST TYPE: EXAM-STYLE QUESTION(S)',
-          'The student wants practice/board question(s) — NOT an explanation of the topic.',
-          'In [[ANSWER]], output ONLY:',
-          '- The requested number of realistic board questions with mark allocation (e.g. 3 marks each)',
-          '- Use this exact heading per question: #### Question 1 · 3 marks (then question text on following lines)',
-          '- Use the middle dot · between label and marks — same format for every question',
-          '- A brief format hint per question (word limit or what to include)',
-          '- A closing line inviting them to attempt or ask for help',
-          'Do NOT answer the questions yourself. Do NOT explain the topic in full.',
-          '',
-        ]
-      : []),
+  );
+
+  if (examQuestion) {
+    blocks.push(
+      'REQUEST TYPE: EXAM-STYLE QUESTION(S)',
+      'The student wants practice/board question(s) — NOT an explanation of the topic.',
+      'In [[ANSWER]], output ONLY:',
+      '- The requested number of realistic board questions with mark allocation (e.g. 3 marks each)',
+      '- Use this exact heading per question: #### Question 1 · 3 marks (then question text on following lines)',
+      '- Use the middle dot · between label and marks — same format for every question',
+      '- A brief format hint per question (word limit or what to include)',
+      '- A closing line inviting them to attempt or ask for help',
+      'Do NOT answer the questions yourself. Do NOT explain the topic in full.',
+      '',
+    );
+  }
+
+  if (intent === 'compare') {
+    blocks.push(
+      'REQUEST TYPE: COMPARE / DIFFERENCE',
+      'Structure [[ANSWER]] with markdown headings:',
+      '- ### First concept — definition + formula (if any) + unit',
+      '- ### Second concept — definition + formula (if any) + unit',
+      '- ### Key differences — precise bullet or table (aspect | first | second)',
+      '- ### One short worked example tying both together',
+      'Answer the comparison directly — no vague analogies without definitions.',
+      '',
+    );
+  }
+
+  blocks.push(
     '--- Reference material (for reasoning only — do NOT copy verbatim) ---',
     contextBlock,
     '--- End reference material ---',
@@ -165,7 +242,9 @@ function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): strin
     modeBlock,
     '',
     'Use the exact [[ANSWER]] / [[REASONING_STEPS]] / [[RAW_MATH]] wrapper format from your instructions.',
-  ].join('\n');
+  );
+
+  return blocks.join('\n');
 }
 
 function parseTutorResponse(raw: string): Pick<TutorDraft, 'answer' | 'reasoningSteps' | 'rawMathExplanation'> {

@@ -182,6 +182,66 @@ function fractionsAnswer(classLevel?: number): string {
   );
 }
 
+function workEnergyCompareAnswer(classLevel?: number): string {
+  const band = voice(classLevel);
+  return formatAnswer(
+    'Work vs Energy',
+    [
+      {
+        heading: 'Work',
+        paragraphs:
+          band === 'junior'
+            ? [
+                '**Work** is done when a force moves an object through a distance in the direction of the force.',
+                'Formula: $W = F \\times s$ (when force and displacement are in the same direction).',
+                'Unit: **joule (J)**. No motion → no work (e.g. pushing a wall).',
+              ]
+            : [
+                '**Work** ($W$) is the transfer of energy when a force produces displacement along (or with a component along) the direction of motion: $W = Fs\\cos\\theta$.',
+                'SI unit: **joule (J)** where $1\\,\\text{J} = 1\\,\\text{N·m}$.',
+                'Work can be positive (force helps motion), negative (force opposes motion), or zero (no displacement or force ⊥ displacement).',
+              ],
+      },
+      {
+        heading: 'Energy',
+        paragraphs:
+          band === 'junior'
+            ? [
+                '**Energy** is the capacity to do work — it tells us how much work an object can do because of its motion or position.',
+                'Types you need: **kinetic energy** (due to motion) $KE = \\frac{1}{2}mv^2$ and **potential energy** (due to position) $PE = mgh$.',
+                'Unit: also **joule (J)**.',
+              ]
+            : [
+                '**Energy** is the capacity to do work. It exists in many forms; in mechanics you mainly use:',
+                '**Kinetic energy:** $KE = \\frac{1}{2}mv^2$ (depends on mass and speed).',
+                '**Gravitational potential energy:** $PE = mgh$ (depends on height in a gravitational field).',
+                'SI unit: **joule (J)**. Energy is a **scalar** quantity.',
+              ],
+      },
+      {
+        heading: 'Key differences',
+        paragraphs: [
+          '| Aspect | Work | Energy |',
+          '| --- | --- | --- |',
+          '| Meaning | Energy **transferred** by a force through displacement | **Capacity** to do work (stored or due to motion) |',
+          '| Depends on | Force, displacement, angle between them | Mass, speed, height (for KE/PE) |',
+          '| When it happens | Only when displacement occurs | Can be stored (e.g. battery, raised object) |',
+          '| Relation | Doing work **changes** an object\'s energy | Work done on an object = gain in its energy (work–energy theorem) |',
+        ],
+      },
+      {
+        heading: 'Quick example',
+        paragraphs: [
+          'You lift a **2 kg** book **1.5 m** vertically.',
+          'Work done against gravity: $W = mgh = 2 \\times 9.8 \\times 1.5 \\approx 29.4\\,\\text{J}$ — this work is stored as **gravitational potential energy**.',
+          'If the book falls, that PE converts to **kinetic energy** as speed increases.',
+        ],
+      },
+    ],
+    '*Quick check:* A force pushes a box but it does not move. How much work is done?*',
+  );
+}
+
 function democracyAnswer(classLevel?: number): string {
   const band = voice(classLevel);
   return formatAnswer(
@@ -317,6 +377,22 @@ function modeFallbackAnswer(doubt: DoubtRequest, mode: AnswerMode, intent: Answe
   };
 
   return formatAnswer(title, modeSections[mode] ?? modeSections.general);
+}
+
+/** High-precision built-in answers for common conceptual questions (before LLM). */
+export function tryCuratedConceptAnswer(doubt: DoubtRequest): string | null {
+  const q = doubt.text.toLowerCase();
+  const intentCompare = /\b(difference|compare|vs|versus|distinguish)\b/.test(q);
+
+  if (
+    intentCompare &&
+    /\bwork\b/.test(q) &&
+    /\benergy\b/.test(q)
+  ) {
+    return workEnergyCompareAnswer(doubt.classLevel);
+  }
+
+  return null;
 }
 
 /**

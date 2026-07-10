@@ -8,6 +8,15 @@ const askBodySchema = z.object({
   doubt: z.string().min(1, 'doubt is required'),
   imageUrl: z.string().url().optional(),
   sessionId: z.string().uuid().optional(),
+  priorMessages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1),
+      }),
+    )
+    .max(8)
+    .optional(),
   subjectId: z
     .enum([
       'math',
@@ -32,7 +41,7 @@ const askBodySchema = z.object({
   stream: z.boolean().optional().default(true),
 });
 
-const ROUTE_TIMEOUT_MS = Number(process.env.ASK_ROUTE_TIMEOUT_MS) || 45_000;
+const ROUTE_TIMEOUT_MS = Number(process.env.ASK_ROUTE_TIMEOUT_MS) || 60_000;
 
 export const askRouter = Router();
 
@@ -58,7 +67,7 @@ askRouter.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
   }
 
-  const { doubt, imageUrl, sessionId, subjectId, classLevel, streamId, boardId, stream } = parsed.data;
+  const { doubt, imageUrl, sessionId, priorMessages, subjectId, classLevel, streamId, boardId, stream } = parsed.data;
   const isSse = stream || req.headers.accept === 'text/event-stream';
 
   console.log(
@@ -79,6 +88,7 @@ askRouter.post('/', async (req, res) => {
     text: doubt,
     imageUrl,
     sessionId,
+    priorMessages,
     subjectId,
     classLevel: classLevel as any,
     stream: streamId,

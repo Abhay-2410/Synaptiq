@@ -1626,6 +1626,8 @@ a {
   margin-top: 0;
   font-size: 0.82rem;
   color: var(--text-muted);
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .quick-check-mastery {

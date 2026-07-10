@@ -4,7 +4,7 @@ import type { AnswerIntent } from './answer-format.js';
 import { buildExamQuestionAnswer, isExamQuestionRequest } from './exam-question.js';
 import type { DoubtRequest, RetrievedChunk } from '../types.js';
 import type { SubjectKey } from '../curriculum/catalog.js';
-import { buildKnowledgeAnswer } from './tutor-knowledge.js';
+import { buildKnowledgeAnswer, tryCuratedConceptAnswer } from './tutor-knowledge.js';
 import { trySolveStemProblem } from './stem-solve.js';
 
 export interface SynthesisInput {
@@ -307,6 +307,9 @@ export function formatTutorAnswer(options: {
 export function synthesizeTutorAnswer(input: SynthesisInput): string {
   const { doubt, context, mode, intent } = input;
 
+  const curated = tryCuratedConceptAnswer(doubt);
+  if (curated) return curated;
+
   if (intent === 'exam-question' || isExamQuestionRequest(doubt.text)) {
     return buildExamQuestionAnswer(doubt, context, mode);
   }
@@ -454,7 +457,11 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
 }
 
 /** Mode-specific instructions appended to LLM tutor prompts. */
-export function tutorModeInstructions(mode: AnswerMode, classLevel?: number): string {
+export function tutorModeInstructions(
+  mode: AnswerMode,
+  classLevel?: number,
+  intent?: AnswerIntent,
+): string {
   const cv = classVoice(classLevel);
   const depth =
     cv.label === 'younger'
@@ -466,7 +473,12 @@ export function tutorModeInstructions(mode: AnswerMode, classLevel?: number): st
   const antiEcho =
     'CRITICAL: Retrieved context is reference only. NEVER repeat chunk titles/headings verbatim. Synthesize into original tutor prose.';
   const antiFiller =
-    'BANNED PHRASES (never use as substitutes for real work): "identify what is given", "apply the correct method", "this step would involve", "use the appropriate formula" without then showing the formula and calculation.';
+    'BANNED PHRASES (never use as substitutes for real work): "identify what is given", "apply the correct method", "this step would involve", "use the appropriate formula" without then showing the formula and calculation. Also banned as openers: "Let\'s explore", "To understand this, let\'s break it down", "Imagine you\'re on a merry-go-round" unless the student asked about circular motion.';
+
+  const compareNote =
+    intent === 'compare'
+      ? 'COMPARE MODE: Give precise definitions, formulas with units, and a difference table — not a single vague paragraph.'
+      : '';
 
   switch (mode) {
     case 'social-studies':
@@ -474,8 +486,11 @@ export function tutorModeInstructions(mode: AnswerMode, classLevel?: number): st
     case 'life-science':
       return `${antiEcho}\n${antiFiller}\nMECHANISM MODE: Plain-language explanation first, then process steps with a real example/analogy. Never restate the question as the answer. ${depth}`;
     case 'physical-science':
+      return intent === 'compare'
+        ? `${antiEcho}\n${antiFiller}\n${compareNote}\nCONCEPTUAL PHYSICS MODE: Define each term, state formulas ($W=Fs$, $KE=\\frac{1}{2}mv^2$, etc.) with SI units, then compare in a table. ${depth}`
+        : `${antiEcho}\n${antiFiller}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
     case 'math':
-      return `${antiEcho}\n${antiFiller}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${compareNote}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
     case 'commerce':
       return `${antiEcho}\n${antiFiller}\nCOMMERCE MODE: Definitions in full sentences PLUS worked examples (journal entries, numerical problems, business scenarios) with real figures. ${depth}`;
     case 'english':

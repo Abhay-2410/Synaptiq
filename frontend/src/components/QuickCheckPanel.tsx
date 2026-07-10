@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MathMarkdown } from './MathMarkdown';
 import type { QuickCheckSession, QuickCheckSessionState } from '../types';
 
@@ -29,17 +29,21 @@ export function QuickCheckPanel({ session, state, onSubmit }: QuickCheckPanelPro
   const topicLabel =
     session.topic && session.topic !== 'General' ? session.topic : 'this topic';
 
-  const showFeedback = Boolean(submitError || (celebrate && state.lastFeedback));
+  const showFeedback = Boolean(submitError || state.lastFeedback);
+
+  useEffect(() => {
+    if (!celebrate) return;
+    const timer = window.setTimeout(() => setCelebrate(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [celebrate]);
 
   async function handleSubmit() {
     if (!value.trim() || submitting || isComplete) return;
     setSubmitting(true);
     setSubmitError(null);
-    setCelebrate(false);
     try {
       await onSubmit(value.trim());
       setCelebrate(true);
-      setTimeout(() => setCelebrate(false), 1800);
       setValue('');
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not submit your answer.');

@@ -13,9 +13,18 @@ const doubtSchema = z.object({
   text: z.string(),
   imageUrl: z.string().optional(),
   sessionId: z.string().optional(),
+  priorMessages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string(),
+      }),
+    )
+    .optional(),
   subjectId: z.string().optional(),
   classLevel: z.number().optional(),
   stream: z.string().optional(),
+  boardId: z.enum(['cbse', 'icse']).optional(),
 });
 
 const workflowInputSchema = z.object({
@@ -26,7 +35,7 @@ const workflowInputSchema = z.object({
 
 const afterRetrieveSchema = workflowInputSchema.extend({
   retrievedChunks: z.array(z.any()),
-  retrievalSource: z.enum(['mastra-qdrant', 'corpus-fallback']),
+  retrievalSource: z.enum(['mastra-qdrant', 'corpus-fallback', 'no-match']),
 });
 
 const afterTutorSchema = afterRetrieveSchema.extend({
@@ -53,9 +62,12 @@ const retrieveStep = createStep({
 
     const retrievedChunks = (await retrieveContext(doubt)) as RetrievedChunk[];
     const retrievalSource =
-      allowCorpusFallback() && retrievedChunks.some((c) => c.metadata.source === 'corpus-fallback')
-        ? ('corpus-fallback' as const)
-        : ('mastra-qdrant' as const);
+      retrievedChunks.length === 0
+        ? ('no-match' as const)
+        : allowCorpusFallback() &&
+            retrievedChunks.some((c) => c.metadata.source === 'corpus-fallback')
+          ? ('corpus-fallback' as const)
+          : ('mastra-qdrant' as const);
 
     reporter?.emit({ type: 'retrieval', chunks: retrievedChunks });
 

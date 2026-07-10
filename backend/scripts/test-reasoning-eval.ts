@@ -4,20 +4,27 @@
  */
 import 'dotenv/config';
 import { evaluateWithHeuristics, evaluateWithLlm } from '../pipeline/stages/quick-check-eval.js';
-import type { QuickCheck } from '../pipeline/types.js';
+import type { ClassLevel } from '../pipeline/curriculum/catalog.js';
+import type { QuickCheck, SubjectKey } from '../pipeline/types.js';
 
-const base = (question: string, expectedAnswer: string): QuickCheck => ({
+const base = (
+  question: string,
+  expectedAnswer: string,
+  subjectId: SubjectKey = 'math',
+  topic = 'Quadratic equations',
+  classLevel: ClassLevel = 10,
+): QuickCheck => ({
   id: 'test',
   index: 0,
-  topic: 'Quadratic equations',
-  subjectId: 'math',
-  classLevel: 10,
+  topic,
+  subjectId,
+  classLevel,
   question,
   expectedAnswer,
   evaluationRubric: 'Judge reasoning quality and method, not keyword overlap.',
 });
 
-const CASES = [
+const MATH_CASES = [
   {
     label: 'Case 1 — correct factors, flawed sign reasoning (expect ~70–80%)',
     quickCheck: base(
@@ -53,6 +60,37 @@ const CASES = [
   },
 ];
 
+const HISTORY_CASES = [
+  {
+    label: 'History — plausible structure but wrong cause (expect low score via LLM)',
+    quickCheck: base(
+      'Quick check: What was one main reason Gandhi called for the Non-Cooperation Movement?',
+      'Accept: protest against the Rowlatt Act and Jallianwala Bagh massacre; non-cooperation with British rule.',
+      'history',
+      'Nationalism in India',
+      10,
+    ),
+    answer:
+      'Gandhi wanted India to become a fully industrial economy like Britain, so he started the Non-Cooperation Movement in 1920.',
+    min: 10,
+    max: 45,
+  },
+  {
+    label: 'History — correct cause with brief answer (expect high partial/correct via LLM)',
+    quickCheck: base(
+      'Quick check: What was one main reason Gandhi called for the Non-Cooperation Movement?',
+      'Accept: protest against the Rowlatt Act and Jallianwala Bagh massacre.',
+      'history',
+      'Nationalism in India',
+      10,
+    ),
+    answer:
+      'After the Jallianwala Bagh massacre and the Rowlatt Act, Gandhi called Indians to boycott British institutions and refuse cooperation with colonial rule.',
+    min: 75,
+    max: 100,
+  },
+];
+
 function inRange(score: number, min: number, max: number): boolean {
   return score >= min && score <= max;
 }
@@ -61,7 +99,7 @@ async function main() {
   console.log('=== Reasoning evaluator — heuristic path (deterministic calibration) ===\n');
   let failed = 0;
 
-  for (const c of CASES) {
+  for (const c of MATH_CASES) {
     const result = evaluateWithHeuristics(c.quickCheck, c.answer);
     const ok = inRange(result.score, c.min, c.max);
     console.log(c.label);
@@ -73,16 +111,19 @@ async function main() {
   }
 
   if (process.env.QUICK_CHECK_USE_LLM !== 'false') {
-    console.log('=== Reasoning evaluator — LLM path (if configured) ===\n');
-    for (const c of CASES) {
+    console.log('=== Reasoning evaluator — LLM path (math + history) ===\n');
+    for (const c of [...MATH_CASES, ...HISTORY_CASES]) {
       try {
         const result = await evaluateWithLlm(c.quickCheck, c.answer);
+        const ok = inRange(result.score, c.min, c.max);
         console.log(c.label);
         console.log(`  score: ${result.score}% | verdict: ${result.verdict} | usedLlm: ${result.usedLlm}`);
+        console.log(`  expected range: ${c.min}–${c.max}% | ${ok ? 'PASS' : 'FAIL'}`);
         console.log(`  feedback: ${result.feedback.slice(0, 160)}…`);
         console.log('');
+        if (!ok) failed++;
       } catch (err) {
-        console.log(`  LLM skipped: ${err instanceof Error ? err.message : err}\n`);
+        console.log(`${c.label}: LLM skipped: ${err instanceof Error ? err.message : err}\n`);
       }
     }
   }
@@ -91,7 +132,7 @@ async function main() {
     console.error(`${failed} calibration case(s) out of range`);
     process.exit(1);
   }
-  console.log('PASS: All three calibration scenarios score in the expected ranges.');
+  console.log('PASS: Reasoning evaluator calibration scenarios score in expected ranges.');
 }
 
 main().catch((err) => {

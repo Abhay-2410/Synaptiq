@@ -54,6 +54,7 @@ export async function ensureQdrantCollection(): Promise<void> {
 
   // Qdrant Cloud requires payload indexes before metadata filters work
   for (const [fieldName, fieldSchema] of [
+    ['board', 'keyword'],
     ['classLevel', 'integer'],
     ['subjectKey', 'keyword'],
     ['topic', 'keyword'],

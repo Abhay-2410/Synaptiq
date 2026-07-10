@@ -212,6 +212,15 @@ export default function App() {
 
       const requestContextKey = studyContextRef.current;
 
+      const priorMessages = messages
+        .filter((m) => {
+          if (!m.content.trim()) return false;
+          if (m.role === 'user') return true;
+          return m.pipelineStage === 'done';
+        })
+        .slice(-6)
+        .map((m) => ({ role: m.role, content: m.content }));
+
       const userMsg: ChatMessage = {
         id: uid(),
         role: 'user',
@@ -256,6 +265,7 @@ export default function App() {
           subjectId: subject,
           classLevel,
           streamId: classLevel >= 11 ? streamId : undefined,
+          priorMessages: priorMessages.length > 0 ? priorMessages : undefined,
           signal: controller.signal,
           onEvent: (event) => {
             if (isStale()) return;
@@ -406,7 +416,7 @@ export default function App() {
         );
       }
     },
-    [boardId, subject, classLevel, streamId, updateAssistant],
+    [boardId, subject, classLevel, streamId, messages, updateAssistant],
   );
 
   const handleQuickCheckSubmit = useCallback(

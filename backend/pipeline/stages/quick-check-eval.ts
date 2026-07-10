@@ -3,7 +3,7 @@ import { isLlmProviderConfigured } from '../../agents/llm-provider.js';
 import { withTimeout } from '../lib/with-timeout.js';
 import type { ClassLevel, QuickCheck, SubjectKey } from '../types.js';
 
-const EVAL_TIMEOUT_MS = Number(process.env.QUICK_CHECK_EVAL_TIMEOUT_MS) || 12_000;
+const EVAL_TIMEOUT_MS = Number(process.env.QUICK_CHECK_EVAL_TIMEOUT_MS) || 15_000;
 
 export type QuickCheckVerdict = 'correct' | 'partial' | 'incorrect';
 

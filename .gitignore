@@ -69,6 +69,17 @@ web_modules/
 .env
 .env.*
 !.env.example
+**/.env
+**/.env.*
+!**/.env.example
+backend/.env
+frontend/.env
+
+# Local secrets / credentials (never commit)
+*.pem
+*.key
+credentials.json
+secrets.json
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

@@ -6,8 +6,8 @@ import type {
 import type { BoardId, ClassLevel, StreamId, SubjectKey } from '../curriculum';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
-/** Total time to wait for /ask (connect + full SSE stream). */
-const ASK_TIMEOUT_MS = Number(import.meta.env.VITE_ASK_TIMEOUT_MS) || 40_000;
+/** Total time to wait for /ask (connect + full SSE stream). Must exceed backend PIPELINE_TIMEOUT_MS (60s). */
+const ASK_TIMEOUT_MS = Number(import.meta.env.VITE_ASK_TIMEOUT_MS) || 65_000;
 
 export type { BoardId, ClassLevel, StreamId, SubjectKey };
 
@@ -67,6 +67,7 @@ export interface AskStreamOptions {
   subjectId?: SubjectKey;
   classLevel?: ClassLevel;
   streamId?: StreamId;
+  priorMessages?: { role: 'user' | 'assistant'; content: string }[];
   onEvent: (event: AskStreamEvent) => void;
   signal?: AbortSignal;
 }
@@ -78,6 +79,7 @@ export async function askDoubtStream({
   subjectId,
   classLevel,
   streamId,
+  priorMessages,
   onEvent,
   signal,
 }: AskStreamOptions): Promise<void> {
@@ -100,6 +102,7 @@ export async function askDoubtStream({
         subjectId,
         classLevel,
         streamId,
+        priorMessages,
         stream: true,
       }),
       signal: mergedSignal,

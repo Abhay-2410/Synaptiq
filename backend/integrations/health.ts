@@ -65,8 +65,6 @@ async function probeEnkryptLive(): Promise<{ live: boolean; error?: string }> {
       // 429/503 during health probe still means the API key and endpoint are valid
       if (res.status === 429 || res.status === 503) return { live: true };
 
-      if (res.status === 503 && attempt < 2) continue;
-
       return { live: false, error: `Enkrypt HTTP ${res.status}` };
     } catch (err) {
       if (attempt < 2) continue;

@@ -114,8 +114,12 @@ export function buildAgentTrail(args: {
           : `No close syllabus match was found — the tutor answered from general ${boardMeta.label} curriculum knowledge instead.`,
       details:
         chunkCount > 0
-          ? `Searched ${classLabel}${streamLabel}, subject ${subjectId} via Qdrant (${retrievalSource}).`
-          : `Filters used: ${classLabel}${streamLabel}, subject ${subjectId}.`,
+          ? `Searched ${classLabel}${streamLabel}, subject ${subjectId} via ${
+              retrievalSource === 'corpus-fallback'
+                ? 'local corpus fallback (Qdrant had no strong match)'
+                : 'Qdrant (mastra-qdrant)'
+            }.`
+          : `Qdrant search returned no close match (${retrievalSource}) for ${classLabel}${streamLabel}, subject ${subjectId}.`,
     },
     {
       id: 'tutor',

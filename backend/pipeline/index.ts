@@ -71,7 +71,7 @@ export interface PipelineCallbacks {
   requestId?: string;
 }
 
-const PIPELINE_TIMEOUT_MS = Number(process.env.PIPELINE_TIMEOUT_MS) || 45_000;
+const PIPELINE_TIMEOUT_MS = Number(process.env.PIPELINE_TIMEOUT_MS) || 60_000;
 
 async function runDoubtPipelineInner(
   doubt: DoubtRequest,
@@ -124,9 +124,20 @@ async function runDoubtPipelineInner(
     });
 
     if (workflowResult.status !== 'success' || !workflowResult.result) {
+      const failed = workflowResult as { error?: unknown; status: string };
+      const root =
+        failed.error instanceof Error
+          ? failed.error.message
+          : typeof failed.error === 'string'
+            ? failed.error
+            : failed.error != null
+              ? JSON.stringify(failed.error)
+              : undefined;
       const errMsg =
         workflowResult.status === 'failed'
-          ? 'Mastra workflow failed during doubt processing'
+          ? root
+            ? `Mastra workflow failed: ${root}`
+            : 'Mastra workflow failed during doubt processing'
           : `Mastra workflow ended with status: ${workflowResult.status}`;
       throw new Error(errMsg);
     }
@@ -142,7 +153,7 @@ async function runDoubtPipelineInner(
       retrievedChunks: RetrievedChunk[];
       draft: TutorDraft;
       verification: VerificationResult;
-      retrievalSource: 'mastra-qdrant' | 'corpus-fallback';
+      retrievalSource: 'mastra-qdrant' | 'corpus-fallback' | 'no-match';
     };
 
     const topic = retrievedChunks[0]?.metadata.topic ?? 'General';
@@ -217,9 +228,18 @@ export async function runDoubtPipeline(
   doubt: DoubtRequest,
   callbacks: PipelineCallbacks,
 ): Promise<PipelineResult> {
-  return withTimeout(
-    runDoubtPipelineInner(doubt, callbacks),
-    PIPELINE_TIMEOUT_MS,
-    'Doubt pipeline',
-  );
+  try {
+    return await withTimeout(
+      runDoubtPipelineInner(doubt, callbacks),
+      PIPELINE_TIMEOUT_MS,
+      'Doubt pipeline',
+    );
+  } catch (err) {
+    if (err instanceof Error && /timed out/i.test(err.message)) {
+      throw new Error(
+        'This is taking longer than usual — please try again in a moment.',
+      );
+    }
+    throw err;
+  }
 }

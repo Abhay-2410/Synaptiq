@@ -6,6 +6,11 @@ import { parseBoardId } from './curriculum/boards.js';
 
 export type { ClassLevel, StreamId, SubjectKey, BoardId };
 
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 /** @deprecated alias — use SubjectKey */
 export type SubjectId = SubjectKey;
 
@@ -13,6 +18,8 @@ export interface DoubtRequest {
   text: string;
   imageUrl?: string;
   sessionId?: string;
+  /** Recent chat turns for follow-up questions (newest last, excluding current doubt). */
+  priorMessages?: ChatTurn[];
   /** Selected subject (canonical key) */
   subjectId?: SubjectKey;
   classLevel?: ClassLevel;
