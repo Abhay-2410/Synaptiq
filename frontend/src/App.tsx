@@ -8,13 +8,14 @@ import { MessageList } from './components/MessageList';
 import { SubjectTabs } from './components/SubjectTabs';
 import { ClassStreamSelector } from './components/ClassStreamSelector';
 import { StudyContextBar, subjectStorageKey } from './components/StudyContextBar';
+import { MobileStudyPanel } from './components/MobileStudyPanel';
 import {
   allSubjectsForClass,
   parseBoardId,
   subjectsForClass,
   type SubjectKey,
 } from './curriculum';
-import type { ChatMessage, PipelineStage } from './types';
+import type { ChatMessage, NotesSimplifyResult, PipelineStage } from './types';
 
 const VALID_CLASSES: ClassLevel[] = [6, 7, 8, 9, 10, 11, 12];
 const VALID_STREAMS: StreamId[] = ['pcm', 'pcb', 'commerce', 'humanities'];
@@ -90,6 +91,7 @@ export default function App() {
 
   const sessionIdRef = useRef<string | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
+  const notesUploadRef = useRef<(() => void) | null>(null);
   const studyContextRef = useRef<string>('');
   const isLoadingRef = useRef(false);
 
@@ -419,6 +421,21 @@ export default function App() {
     [boardId, subject, classLevel, streamId, messages, updateAssistant],
   );
 
+  const handleRetry = useCallback(
+    (assistantMessageId: string) => {
+      if (isLoadingRef.current) return;
+      const idx = messages.findIndex((m) => m.id === assistantMessageId);
+      if (idx <= 0) return;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i]?.role === 'user' && messages[i].content.trim()) {
+          void handleSend(messages[i].content);
+          return;
+        }
+      }
+    },
+    [messages, handleSend],
+  );
+
   const handleQuickCheckSubmit = useCallback(
     async (messageId: string, answer: string) => {
       const message = messages.find((m) => m.id === messageId);
@@ -473,9 +490,43 @@ export default function App() {
     [messages, updateAssistant],
   );
 
+  const handleNotesComplete = useCallback(
+    (result: NotesSimplifyResult, fileName: string) => {
+      const userMsg: ChatMessage = {
+        id: uid(),
+        role: 'user',
+        content: `📎 Uploaded my notes: ${fileName}`,
+        timestamp: new Date(),
+      };
+
+      const assistantMsg: ChatMessage = {
+        id: uid(),
+        role: 'assistant',
+        content: result.simplifiedMarkdown,
+        timestamp: new Date(),
+        pipelineStage: 'done',
+        notesResult: result,
+        notesFileName: fileName,
+        agentTrail: result.agentTrail,
+      };
+
+      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    },
+    [],
+  );
+
+  const handleRequestNotesUpload = useCallback(() => {
+    notesUploadRef.current?.();
+  }, []);
+
   return (
     <div className="app-shell">
-      <aside className="left-col">
+      <MobileStudyPanel
+        boardId={boardId}
+        classLevel={classLevel}
+        streamId={streamId}
+        subject={subject}
+      >
         <BoardSelector boardId={boardId} onBoardChange={handleBoardChange} disabled={isLoading} />
         <ClassStreamSelector
           classLevel={classLevel}
@@ -494,7 +545,7 @@ export default function App() {
           streamSubjects={streamSubjects}
           disabled={isLoading}
         />
-      </aside>
+      </MobileStudyPanel>
       <div className="app-main">
         <Header />
         <StudyContextBar
@@ -512,10 +563,20 @@ export default function App() {
             classLevel={classLevel}
             streamId={streamId}
             onExampleSelect={handleSend}
+            onNotesUpload={handleRequestNotesUpload}
             onSubmitQuickCheck={handleQuickCheckSubmit}
+            onRetry={handleRetry}
             isLoading={isLoading}
           />
-          <ChatInput onSend={handleSend} disabled={isLoading} />
+          <ChatInput
+            onSend={handleSend}
+            disabled={isLoading}
+            notesContext={{ boardId, classLevel, streamId, subject }}
+            onNotesComplete={handleNotesComplete}
+            onRegisterNotesUpload={(open) => {
+              notesUploadRef.current = open;
+            }}
+          />
         </main>
       </div>
     </div>

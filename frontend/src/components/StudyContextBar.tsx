@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { BoardId, ClassLevel, StreamId } from '../api/client';
 import { contextHintForBoard, getBoardMeta, getSubjectMeta, STREAM_META, type SubjectKey } from '../curriculum';
 
@@ -9,17 +10,25 @@ interface StudyContextBarProps {
 }
 
 export function StudyContextBar({ boardId, classLevel, streamId, subject }: StudyContextBarProps) {
-  const subjectLabel = getSubjectMeta(subject).label;
+  const subjectMeta = getSubjectMeta(subject);
   const streamLabel =
     classLevel >= 11 && streamId ? STREAM_META[streamId].label : null;
   const boardLabel = getBoardMeta(boardId).label;
 
   return (
     <div className="study-context-bar" aria-label="Current study context">
-      <span className="context-chip">{boardLabel}</span>
-      <span className="context-chip">Class {classLevel}</span>
-      {streamLabel && <span className="context-chip">{streamLabel}</span>}
-      <span className="context-chip active">{subjectLabel}</span>
+      <span className="study-context-label">Now studying</span>
+      <div className="study-context-chips">
+        <span className="context-chip">{boardLabel}</span>
+        <span className="context-chip">Class {classLevel}</span>
+        {streamLabel && <span className="context-chip">{streamLabel}</span>}
+        <span
+          className="context-chip active"
+          style={{ '--subject-color': subjectMeta.color } as CSSProperties}
+        >
+          {subjectMeta.label}
+        </span>
+      </div>
       <span className="context-hint">{contextHintForBoard(boardId, classLevel)}</span>
     </div>
   );

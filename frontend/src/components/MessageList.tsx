@@ -12,7 +12,9 @@ interface MessageListProps {
   classLevel: ClassLevel;
   streamId?: StreamId;
   onExampleSelect: (prompt: string) => void;
+  onNotesUpload?: () => void;
   onSubmitQuickCheck: (messageId: string, answer: string) => Promise<void>;
+  onRetry?: (assistantMessageId: string) => void;
   isLoading: boolean;
 }
 
@@ -23,7 +25,9 @@ export function MessageList({
   classLevel,
   streamId,
   onExampleSelect,
+  onNotesUpload,
   onSubmitQuickCheck,
+  onRetry,
   isLoading,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -43,6 +47,7 @@ export function MessageList({
               classLevel={classLevel}
               streamId={streamId}
               onSelect={onExampleSelect}
+              onNotesUpload={onNotesUpload}
               disabled={isLoading}
             />
           </div>
@@ -52,11 +57,13 @@ export function MessageList({
               key={msg.id}
               message={msg}
               subject={subject}
+              classLevel={classLevel}
               isFirstAssistant={
                 msg.role === 'assistant' &&
                 msg.id === messages.find((m) => m.role === 'assistant')?.id
               }
               onSubmitQuickCheck={onSubmitQuickCheck}
+              onRetry={onRetry}
             />
           ))
         )}

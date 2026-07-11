@@ -131,6 +131,7 @@ export interface StackHealthSnapshot {
   mastra: { agents: string[]; workflows: string[]; vectorStore: string };
   qdrant: { status: string; indexName: string; vectorCount: number; provider: string };
   enkrypt: { status: string; policyName: string };
+  llm?: { provider: string; status: string; required?: boolean };
   warnings: string[];
 }
 
@@ -175,9 +176,37 @@ export interface ChatMessage {
   quickCheckState?: QuickCheckSessionState;
   mastery?: MasteryState;
   stackHealth?: StackHealthSnapshot;
+  /** Simplified notes result — shown as a tutor message card */
+  notesResult?: NotesSimplifyResult;
+  notesFileName?: string;
 }
 
 export type PipelineStage = 'retrieval' | 'tutor' | 'verification' | 'done' | 'error';
+
+export type NotesPipelineStage = 'upload' | 'extract' | 'simplify' | 'pdf' | 'done' | 'error';
+
+export type ExtractionQuality = 'good' | 'poor' | 'failed';
+
+export interface NotesSimplifyResult {
+  extractedPreview: string;
+  extractionQuality: ExtractionQuality;
+  extractionMethod: 'pdf-text' | 'ocr-image' | 'ocr-pdf';
+  simplifiedMarkdown: string;
+  pdfBase64: string;
+  warnings: string[];
+  model: string;
+  agentTrail?: AgentTrailStep[];
+  resolvedSubjectId: SubjectKey;
+  resolvedSubjectLabel: string;
+  pdfFileName: string;
+  subjectAdjusted?: boolean;
+}
+
+export type NotesStreamEvent =
+  | { type: 'status'; stage: NotesPipelineStage; message: string }
+  | { type: 'agent_trail'; trail: AgentTrailStep[] }
+  | { type: 'done'; result: NotesSimplifyResult }
+  | { type: 'error'; message: string };
 
 export interface HealthResponse {
   status: string;

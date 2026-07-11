@@ -27,6 +27,15 @@ const cases: Array<{ label: string; doubt: DoubtRequest; mustInclude: string[] }
     mustInclude: ['x = 2', 'x = 3', '(x', 'factor'],
   },
   {
+    label: 'Physics — Ohm\'s law numerical',
+    doubt: {
+      text: "State Ohm's law and solve: R = 10 Ω, V = 5 V — find I.",
+      subjectId: 'physics',
+      classLevel: 10,
+    },
+    mustInclude: ['0.5', 'V = IR', 'I =', 'A'],
+  },
+  {
     label: 'Physics — F=ma numerical',
     doubt: {
       text: 'A body of mass 2 kg is subjected to a force of 10 N. Find acceleration.',

@@ -152,3 +152,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Tesseract language data (downloaded at runtime by tesseract.js)
+*.traineddata
+
+# Local session persistence (Quick Challenge + mastery)
+.data/

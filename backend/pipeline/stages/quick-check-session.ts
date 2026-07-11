@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { tutorAgent } from '../../agents/tutor.agent.js';
 import { isLlmProviderConfigured } from '../../agents/llm-provider.js';
+import { loadJsonFile, scheduleJsonSave } from '../lib/session-persist.js';
 import { withTimeout } from '../lib/with-timeout.js';
 import type {
   ClassLevel,
@@ -24,9 +25,42 @@ interface MasteryRecord {
   correct: number;
 }
 
-const masteryStore = new Map<string, Map<string, MasteryRecord>>();
-const challengeSessionStore = new Map<string, QuickCheckSession>();
-const activeChallengeByStudentSession = new Map<string, string>();
+type MasteryPersisted = Record<string, Record<string, MasteryRecord>>;
+type ChallengePersisted = Record<string, QuickCheckSession>;
+type ActiveChallengePersisted = Record<string, string>;
+
+function loadMasteryStore(): Map<string, Map<string, MasteryRecord>> {
+  const raw = loadJsonFile<MasteryPersisted>('mastery.json', {});
+  const store = new Map<string, Map<string, MasteryRecord>>();
+  for (const [sessionId, topics] of Object.entries(raw)) {
+    store.set(sessionId, new Map(Object.entries(topics)));
+  }
+  return store;
+}
+
+function persistMasteryStore(store: Map<string, Map<string, MasteryRecord>>): void {
+  const out: MasteryPersisted = {};
+  for (const [sessionId, topics] of store) {
+    out[sessionId] = Object.fromEntries(topics);
+  }
+  scheduleJsonSave('mastery.json', out);
+}
+
+function persistChallengeSessions(store: Map<string, QuickCheckSession>): void {
+  scheduleJsonSave('challenge-sessions.json', Object.fromEntries(store));
+}
+
+function persistActiveChallenges(store: Map<string, string>): void {
+  scheduleJsonSave('active-challenges.json', Object.fromEntries(store));
+}
+
+const masteryStore = loadMasteryStore();
+const challengeSessionStore = new Map<string, QuickCheckSession>(
+  Object.entries(loadJsonFile<ChallengePersisted>('challenge-sessions.json', {})),
+);
+const activeChallengeByStudentSession = new Map<string, string>(
+  Object.entries(loadJsonFile<ActiveChallengePersisted>('active-challenges.json', {})),
+);
 
 function masteryKey(topic: string, subjectId: SubjectKey): string {
   return `${subjectId}::${topic}`;
@@ -63,6 +97,7 @@ function setMasteryState(sessionId: string, topic: string, subjectId: SubjectKey
     correct: current.correct + (correctAttempt ? 1 : 0),
   });
   masteryStore.set(sessionId, session);
+  persistMasteryStore(masteryStore);
 }
 
 function summarizeTutorAnswer(answer: string): string {
@@ -78,8 +113,10 @@ export function abandonActiveChallengeSession(studentSessionId: string): void {
   if (session && session.status === 'active') {
     session.status = 'abandoned';
     challengeSessionStore.set(activeId, session);
+    persistChallengeSessions(challengeSessionStore);
   }
   activeChallengeByStudentSession.delete(studentSessionId);
+  persistActiveChallenges(activeChallengeByStudentSession);
 }
 
 export function createQuickCheckSession(
@@ -113,8 +150,10 @@ export function createQuickCheckSession(
   };
 
   challengeSessionStore.set(session.id, session);
+  persistChallengeSessions(challengeSessionStore);
   if (studentSessionId) {
     activeChallengeByStudentSession.set(studentSessionId, session.id);
+    persistActiveChallenges(activeChallengeByStudentSession);
   }
 
   return session;
@@ -281,6 +320,7 @@ export async function evaluateQuickCheckSessionAnswer(
     session.currentIndex = session.totalQuestions;
     activeChallengeByStudentSession.delete(studentSessionId);
     challengeSessionStore.set(session.id, session);
+    persistChallengeSessions(challengeSessionStore);
 
     const finalAnalysis = await generateSessionAnalysis(session);
     const mastery = getMasteryState(studentSessionId, session.topic, session.subjectId);
@@ -300,6 +340,7 @@ export async function evaluateQuickCheckSessionAnswer(
 
   session.currentIndex += 1;
   challengeSessionStore.set(session.id, session);
+  persistChallengeSessions(challengeSessionStore);
 
   const mastery = getMasteryState(studentSessionId, session.topic, session.subjectId);
   return {
@@ -352,6 +393,7 @@ export async function evaluateQuickCheck(
     responses: [],
   };
   challengeSessionStore.set(tempSession.id, tempSession);
+  persistChallengeSessions(challengeSessionStore);
 
   return evaluateQuickCheckSessionAnswer(sessionId, tempSession.id, userAnswer);
 }

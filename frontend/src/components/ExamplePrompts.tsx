@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
 import {
-  getBoardMeta,
   getSubjectMeta,
   promptsFor,
   type BoardId,
@@ -14,6 +13,7 @@ interface ExamplePromptsProps {
   classLevel: ClassLevel;
   streamId?: StreamId;
   onSelect: (prompt: string) => void;
+  onNotesUpload?: () => void;
   disabled?: boolean;
 }
 
@@ -23,10 +23,10 @@ export function ExamplePrompts({
   classLevel,
   streamId,
   onSelect,
+  onNotesUpload,
   disabled,
 }: ExamplePromptsProps) {
   const config = getSubjectMeta(subject);
-  const board = getBoardMeta(boardId);
   const prompts = promptsFor(boardId, classLevel, subject, streamId);
 
   return (
@@ -34,17 +34,28 @@ export function ExamplePrompts({
       <p className="welcome-eyebrow">Hey there! 👋</p>
       <h2>What would you like to learn today?</h2>
       <p className="welcome-lead">
-        Stuck on homework? Pick a question like your classmates would ask — or type your own doubt.
+        Stuck on homework? Ask a doubt below — or upload a photo of messy notes and we'll rewrite
+        them clearly for your class.
       </p>
-      <p className="welcome-subject-hint">
-        <span
-          className="subject-pill"
-          style={{ '--subject-color': config.color } as CSSProperties}
+      <p className="welcome-subject-hint">Tap a question card to get started, or use Fix my notes below.</p>
+
+      {onNotesUpload && (
+        <button
+          type="button"
+          className="notes-welcome-cta"
+          disabled={disabled}
+          onClick={onNotesUpload}
         >
-          {board.shortLabel} · Class {classLevel} · {config.label}
-        </span>
-        {' '}— tap a card to get started
-      </p>
+          <span className="notes-welcome-cta-icon" aria-hidden>
+            📸
+          </span>
+          <span className="notes-welcome-cta-text">
+            <strong>Messy notebook photo?</strong>
+            <small>Tap here — we'll turn it into clean, easy-to-read notes</small>
+          </span>
+        </button>
+      )}
+
       <div className="example-prompts" key={`${boardId}-${classLevel}-${subject}-${streamId ?? 'none'}`}>
         {prompts.map((prompt, index) => (
           <button

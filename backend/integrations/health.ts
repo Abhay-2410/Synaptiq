@@ -1,7 +1,10 @@
 import { fetchWithTimeout } from '../pipeline/lib/fetch-timeout.js';
 import { isGroqReachable, isLlmProviderConfigured } from '../agents/llm-provider.js';
+import { getEmbeddingMode } from '../pipeline/embeddings/embed.js';
+import { isOcrWarmed } from '../pipeline/notes/extract-text.js';
 import { probeMastraQdrant } from './qdrant-retrieval.js';
 import { isStrictStackMode, requireLiveEnkrypt, requireLiveQdrant } from './strict-config.js';
+import { NOTES_WORKFLOW_ID } from '../workflows/notes.workflow.js';
 
 export interface StackHealthStatus {
   strictMode: boolean;
@@ -24,6 +27,23 @@ export interface StackHealthStatus {
     required: boolean;
     policyName: string;
     error?: string;
+  };
+  llm: {
+    provider: 'groq';
+    status: 'live' | 'offline' | 'not_configured';
+    required: boolean;
+  };
+  retrieval: {
+    mode: ReturnType<typeof getEmbeddingMode>;
+    hybridLexicalRerank: boolean;
+  };
+  notes: {
+    workflowId: string;
+    ocrWarmed: boolean;
+  };
+  sessions: {
+    persistence: 'file-backed';
+    dataDir: string;
   };
   ready: boolean;
   warnings: string[];
@@ -116,13 +136,20 @@ export async function checkStackHealth(agentIds: string[], workflowIds: string[]
     warnings.push('Groq API unreachable — Mastra tutor agents may fall back locally');
   }
 
+  let llmStatus: StackHealthStatus['llm']['status'] = 'not_configured';
+  if (isLlmProviderConfigured()) {
+    llmStatus = isGroqReachable() === false ? 'offline' : 'live';
+  }
+
   const qdrantRequired = requireLiveQdrant();
   const enkryptRequired = requireLiveEnkrypt();
+  const llmRequired = isLlmProviderConfigured();
 
   const ready =
     qdrantStatus === 'live' &&
     (!enkryptRequired || enkryptStatus === 'live') &&
-    (!qdrantRequired || qdrantStatus === 'live');
+    (!qdrantRequired || qdrantStatus === 'live') &&
+    (!llmRequired || llmStatus === 'live');
 
   if (strict && !ready) {
     warnings.unshift('STRICT_STACK_MODE: one or more sponsor integrations are not live');
@@ -150,6 +177,23 @@ export async function checkStackHealth(agentIds: string[], workflowIds: string[]
       policyName: process.env.ENKRYPT_POLICY_NAME ?? 'synaptiq-tutor-v1',
       error: enkryptError,
     },
+    llm: {
+      provider: 'groq',
+      status: llmStatus,
+      required: llmRequired,
+    },
+    retrieval: {
+      mode: getEmbeddingMode(),
+      hybridLexicalRerank: true,
+    },
+    notes: {
+      workflowId: NOTES_WORKFLOW_ID,
+      ocrWarmed: isOcrWarmed(),
+    },
+    sessions: {
+      persistence: 'file-backed',
+      dataDir: process.env.SESSION_DATA_DIR ?? '.data/sessions',
+    },
     ready,
     warnings,
   };
@@ -167,6 +211,7 @@ export async function logStackHealthAtStartup(
     `  Qdrant     @mastra/qdrant · ${health.qdrant.indexName} · ${health.qdrant.vectorCount} vectors · ${health.qdrant.status}`,
   );
   console.log(`  Enkrypt    ${health.enkrypt.status}${health.enkrypt.required ? ' (required)' : ''}`);
+  console.log(`  Groq LLM   ${health.llm.status}${health.llm.required ? ' (required)' : ''}`);
 
   if (health.warnings.length > 0) {
     console.warn('\n[synaptiq] Stack warnings:');

@@ -130,4 +130,33 @@ curl -N -X POST http://localhost:3001/ask \
 
 ## 👨‍💻 Built for HiDevs × Mastra Hackathon 2026
 
+### Judging criteria alignment
+
+| Criterion | Synaptiq evidence |
+|-----------|-------------------|
+| Mastra (25%) | 3 agents, `synaptiq-doubt-pipeline` workflow, `syllabus-search` tool, SSE streaming |
+| Qdrant (20%) | `@mastra/qdrant` on every `/ask`, board/class/subject filters, 2500+ vectors |
+| Enkrypt (20%) | Mandatory verify step, 4 guardrails, UI badge + agent trail |
+| Output quality (20%) | Subject modes, STEM solver, exam questions, follow-up context |
+| Impact (15%) | CBSE + ICSE, Classes 6–12, all streams |
+
+📄 **[HACKATHON_SUBMISSION.md](./HACKATHON_SUBMISSION.md)** — 5-minute judge demo script  
+📄 **[ARCHITECTURE.md](./ARCHITECTURE.md)** — as-built architecture (accurate)
+
+### Verify sponsor stack
+
+```bash
+cd backend
+npm run test:sponsor
+```
+
+### Docker (optional)
+
+```bash
+docker compose up -d              # Qdrant only
+docker compose --profile full up  # Qdrant + backend (requires backend/.env)
+```
+
+---
+
 *Synaptiq — Every doubt deserves more than a generic answer. Learn smarter.*

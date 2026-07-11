@@ -9,6 +9,10 @@ import { detectIntent } from './local-tutor.js';
 import { stepsToMarkdown, type RawMathStep } from './raw-math/quadratic.js';
 import { enhanceRawMathMarkdown } from './raw-math/enhance-steps.js';
 import { buildLinearSystemWorked, parseLinearSystem } from './raw-math/linear-system.js';
+import {
+  formatPhysicsNarrative,
+  trySolvePhysicsNumerical,
+} from './physics-numerical.js';
 
 export function normalizeMathInput(text: string): string {
   return text
@@ -370,7 +374,18 @@ function isStemSolveIntent(doubt: DoubtRequest): boolean {
   if (mode !== 'math' && mode !== 'physical-science') return false;
   const intent = detectIntent(doubt.text);
   if (intent === 'solve') return true;
+  if (needsNumericSolveCue(doubt.text)) return true;
   return /[=+\-×÷^²]/.test(doubt.text) || /\d+\s*x/.test(doubt.text);
+}
+
+function needsNumericSolveCue(text: string): boolean {
+  return (
+    /\b(find|calculate|compute|solve|work\s*out|determine)\b/i.test(text) &&
+    /\d/.test(text) &&
+    (/[=Ωω]/.test(text) ||
+      /\b[virfma]\s*=/i.test(text) ||
+      /\b(mass|force|resistance|voltage|current|distance|time|speed|energy)\b/i.test(text))
+  );
 }
 
 /**
@@ -414,9 +429,14 @@ export function trySolveStemProblem(
   }
 
   if (mode === 'physical-science') {
-    const fma = parseForceMassAccel(doubt.text);
-    if (fma) {
-      return draftFromSteps("Newton's second law", buildFmaWorked(fma), classLevel, { fma });
+    const physics = trySolvePhysicsNumerical(doubt.text);
+    if (physics) {
+      return {
+        answer: formatPhysicsNarrative(physics),
+        rawMathExplanation: enhanceRawMathMarkdown(
+          stepsToMarkdown(physics.steps, 'Step-by-step working'),
+        ),
+      };
     }
   }
 

@@ -12,14 +12,18 @@ import {
 } from '../agents/index.js';
 import { checkStackHealth, logStackHealthAtStartup } from '../integrations/health.js';
 import { ensureQdrantCollection } from '../integrations/qdrant-store.js';
+import { warmupNotesOcr } from '../pipeline/notes/extract-text.js';
 import { askRouter } from './routes/ask.js';
 import { learnRouter } from './routes/learn.js';
+import { notesRouter } from './routes/notes.js';
 import { verifyRouter } from './routes/verify.js';
+import { createCorsOptions } from './lib/cors.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
+const HOST = process.env.HOST ?? '0.0.0.0';
 
-app.use(cors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' }));
+app.use(cors(createCorsOptions()));
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/', (_req, res) => {
@@ -45,7 +49,7 @@ app.get('/', (_req, res) => {
     <h1>Synaptiq Backend</h1>
     <p>Student doubt-solving — <strong>Mastra workflow</strong> + <strong>@mastra/qdrant</strong> + <strong>Enkrypt AI</strong></p>
     <div class="stack">
-      Pipeline: Mastra <code>synaptiq-doubt-pipeline</code> workflow → Qdrant retrieval → Tutor agent → Enkrypt verify
+      Pipeline: Mastra <code>synaptiq-doubt-pipeline</code> + <code>synaptiq-notes-pipeline</code> workflows → Qdrant retrieval → Tutor agent → Enkrypt verify
     </div>
     <p style="margin:1rem 0;padding:0.75rem 1rem;background:#1e293b;border-radius:8px;border:1px solid #334155;">
       <strong>Student UI:</strong> open <a href="http://localhost:5173">http://localhost:5173</a>
@@ -54,6 +58,7 @@ app.get('/', (_req, res) => {
       <li><a href="/health">GET /health</a> — live stack status (Mastra + Qdrant + Enkrypt)</li>
       <li><code>POST /ask</code> — submit a student doubt (SSE or JSON)</li>
       <li><code>POST /learn/check</code> — Quick Challenge evaluation</li>
+      <li><code>POST /notes/simplify</code> — upload notes image/PDF → simplified PDF</li>
       <li><code>POST /internal/verify</code> — Enkrypt verification stage</li>
       <li><code>GET /api/agents</code> — Mastra agents</li>
     </ul>
@@ -80,6 +85,7 @@ app.get('/health', async (_req, res) => {
 
 app.use('/ask', askRouter);
 app.use('/learn', learnRouter);
+app.use('/notes', notesRouter);
 app.use('/internal/verify', verifyRouter);
 
 const server = new MastraServer({ app, mastra });
@@ -95,10 +101,16 @@ try {
 
 await logStackHealthAtStartup(MASTRA_AGENT_IDS, MASTRA_WORKFLOW_IDS);
 
-app.listen(PORT, () => {
-  console.log(`Synaptiq backend listening on http://localhost:${PORT}`);
+void warmupNotesOcr();
+
+app.listen(PORT, HOST, () => {
+  console.log(`Synaptiq backend listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  if (HOST === '0.0.0.0') {
+    console.log('  (LAN) Use your PC IP on port 3001 if calling API directly from a phone');
+  }
   console.log('  GET  /health            — Mastra + Qdrant + Enkrypt live status');
   console.log('  POST /ask               — Mastra workflow doubt pipeline');
   console.log('  POST /learn/check       — Quick Challenge (Mastra evaluator agent)');
+  console.log('  POST /notes/simplify    — Notes simplifier (Mastra workflow → OCR → PDF)');
   console.log('  POST /internal/verify   — Enkrypt verification');
 });

@@ -93,6 +93,11 @@ function buildExamplesForQuestions(
       ];
     } else if (/speed|velocity|acceleration|motion|displacement/.test(p)) {
       paragraphs = exampleForMotionPrompt(q.prompt, doubt.classLevel);
+    } else if (/ohm|resistance|current|voltage|circuit|electricity/.test(p)) {
+      paragraphs = [
+        "**Example:** $R = 10\\,\\Omega$, $V = 5\\,\\text{V}$ — find current.",
+        "Ohm's law: $V = IR \\Rightarrow I = V/R = 5/10 = 0.5\\,\\text{A}$.",
+      ];
     } else if (/force|newton|f\s*=\s*ma/.test(p)) {
       paragraphs = [
         '**Example:** Mass $m = 4\\,\\text{kg}$, net force $F = 12\\,\\text{N}$.',

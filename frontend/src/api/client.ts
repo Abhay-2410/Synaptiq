@@ -1,6 +1,7 @@
 import type {
   AskStreamEvent,
   HealthResponse,
+  NotesStreamEvent,
   QuickCheckEvaluationResult,
 } from '../types';
 import type { BoardId, ClassLevel, StreamId, SubjectKey } from '../curriculum';
@@ -8,11 +9,15 @@ import type { BoardId, ClassLevel, StreamId, SubjectKey } from '../curriculum';
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 /** Total time to wait for /ask (connect + full SSE stream). Must exceed backend PIPELINE_TIMEOUT_MS (60s). */
 const ASK_TIMEOUT_MS = Number(import.meta.env.VITE_ASK_TIMEOUT_MS) || 65_000;
+const NOTES_TIMEOUT_MS = Number(import.meta.env.VITE_NOTES_TIMEOUT_MS) || 100_000;
 
 export type { BoardId, ClassLevel, StreamId, SubjectKey };
 
 export const ASK_ERROR_MESSAGE =
   'Something went wrong — we could not get an answer in time. Please try again.';
+
+export const NOTES_ERROR_MESSAGE =
+  'Something went wrong with your notes. Try a clearer photo or a smaller file.';
 
 function mergeAbortSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal {
   if (!a) return b ?? new AbortController().signal;
@@ -165,6 +170,119 @@ export async function askDoubtStream({
 
   if (!receivedTerminalEvent) {
     throw new Error(ASK_ERROR_MESSAGE);
+  }
+}
+
+function processNotesSseLine(line: string, onEvent: (event: NotesStreamEvent) => void): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('data:')) return false;
+  const payload = trimmed.slice(5).trim();
+  if (!payload) return false;
+  try {
+    const event = JSON.parse(payload) as NotesStreamEvent;
+    onEvent(event);
+    return event.type === 'done' || event.type === 'error';
+  } catch {
+    return false;
+  }
+}
+
+export interface SimplifyNotesOptions {
+  file: File;
+  boardId?: BoardId;
+  subjectId?: SubjectKey;
+  classLevel?: ClassLevel;
+  streamId?: StreamId;
+  onEvent: (event: NotesStreamEvent) => void;
+  signal?: AbortSignal;
+}
+
+export async function simplifyNotesStream({
+  file,
+  boardId,
+  subjectId,
+  classLevel,
+  streamId,
+  onEvent,
+  signal,
+}: SimplifyNotesOptions): Promise<void> {
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), NOTES_TIMEOUT_MS);
+  const mergedSignal = mergeAbortSignals(signal, timeoutController.signal);
+
+  const form = new FormData();
+  form.append('file', file);
+  if (boardId) form.append('boardId', boardId);
+  if (subjectId) form.append('subjectId', subjectId);
+  if (classLevel != null) form.append('classLevel', String(classLevel));
+  if (streamId) form.append('streamId', streamId);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/notes/simplify?stream=1`, {
+      method: 'POST',
+      headers: { Accept: 'text/event-stream' },
+      body: form,
+      signal: mergedSignal,
+    });
+  } catch (err) {
+    if (timeoutController.signal.aborted && !signal?.aborted) {
+      throw new Error(NOTES_ERROR_MESSAGE);
+    }
+    throw err;
+  }
+
+  if (!res.ok) {
+    clearTimeout(timeout);
+    const err = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(err?.error ?? NOTES_ERROR_MESSAGE);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    clearTimeout(timeout);
+    throw new Error(NOTES_ERROR_MESSAGE);
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let receivedTerminalEvent = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (processNotesSseLine(line, onEvent)) {
+          receivedTerminalEvent = true;
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      for (const line of buffer.split('\n')) {
+        if (processNotesSseLine(line, onEvent)) {
+          receivedTerminalEvent = true;
+        }
+      }
+    }
+  } catch (err) {
+    if (timeoutController.signal.aborted && !signal?.aborted) {
+      throw new Error(NOTES_ERROR_MESSAGE);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+    reader.releaseLock();
+  }
+
+  if (!receivedTerminalEvent) {
+    throw new Error(NOTES_ERROR_MESSAGE);
   }
 }
 

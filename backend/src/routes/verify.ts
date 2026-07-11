@@ -3,6 +3,28 @@ import { z } from 'zod';
 import { runVerification } from '../../pipeline/stages/verify.js';
 import type { VerificationInput } from '../../pipeline/types.js';
 
+function requireInternalAccess(
+  req: import('express').Request,
+  res: import('express').Response,
+  next: import('express').NextFunction,
+): void {
+  const secret = process.env.INTERNAL_API_SECRET?.trim();
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    next();
+    return;
+  }
+  const provided = req.header('x-internal-secret');
+  if (provided !== secret) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  next();
+}
+
 const verifyBodySchema = z.object({
   doubt: z.string().min(1),
   draft: z.object({
@@ -31,6 +53,8 @@ const verifyBodySchema = z.object({
 });
 
 export const verifyRouter = Router();
+
+verifyRouter.use(requireInternalAccess);
 
 /**
  * POST /internal/verify

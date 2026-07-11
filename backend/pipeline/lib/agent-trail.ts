@@ -1,9 +1,13 @@
 import { getBoardMeta } from '../curriculum/boards.js';
 import type { AgentTrailStep, RetrievedChunk, TutorDraft, VerificationResult } from '../types.js';
+import type { ExtractionQuality, NotesStudyContext } from '../notes/types.js';
+import { NOTES_WORKFLOW_ID } from '../../workflows/notes.workflow.js';
 
 function friendlyModelName(model: string): string {
   if (model === 'synaptiq-stem-solver') return 'built-in math & science solver';
   if (model === 'synaptiq-local-tutor') return 'offline tutor engine';
+  if (model === 'synaptiq-follow-up') return 'follow-up example generator';
+  if (model === 'synaptiq-curated') return 'curriculum knowledge base';
   if (/llama-3\.3-70b/i.test(model)) return 'Groq AI tutor (Llama 3.3 70B)';
   if (/llama-3\.1-8b/i.test(model)) return 'Groq AI (Llama 3.1 8B)';
   if (/groq/i.test(model)) return 'Groq AI tutor';
@@ -102,11 +106,21 @@ export function buildAgentTrail(args: {
       summary:
         'Your doubt was processed through the Synaptiq pipeline: find syllabus notes → write explanation → safety check.',
       details:
-        'Powered by Mastra workflow “synaptiq-doubt-pipeline” with Tutor, Quick Check, and Retriever agents working together.',
+        'Powered by Mastra workflow “synaptiq-doubt-pipeline”: Syllabus Retriever tool → Tutor agent → Enkrypt verify → Quick Challenge evaluator.',
+    },
+    {
+      id: 'retriever-agent',
+      label: 'Syllabus Retriever agent — syllabus-search tool',
+      status: chunkCount > 0 ? 'completed' : 'flagged',
+      summary:
+        chunkCount > 0
+          ? `Mastra tool \`syllabus-search\` queried Qdrant and returned ${chunkCount} filtered chunk${chunkCount === 1 ? '' : 's'}${topics ? ` on ${topics}` : ''}.`
+          : 'Mastra syllabus-search tool ran but found no close match — tutor used general curriculum knowledge.',
+      details: `Agent: syllabus-retriever · Vector store: @mastra/qdrant · Filters: board, class, subject.`,
     },
     {
       id: 'retrieval',
-      label: 'Qdrant — syllabus search',
+      label: 'Qdrant — vector memory',
       status: chunkCount > 0 ? 'completed' : 'flagged',
       summary:
         chunkCount > 0
@@ -158,6 +172,86 @@ export function buildAgentTrail(args: {
           : verification.status === 'verified'
             ? 'All pipeline stages completed successfully.'
             : 'Answer delivered — see the verification badge for any advisory notes.',
+    },
+  ];
+}
+
+const EXTRACTION_LABELS: Record<ExtractionQuality, string> = {
+  good: 'clear read',
+  poor: 'partial read (some handwriting was fuzzy)',
+  failed: 'unreadable',
+};
+
+export function buildNotesAgentTrail(args: {
+  context: NotesStudyContext;
+  subjectLabel: string;
+  subjectAdjusted?: boolean;
+  extractionMethod: 'pdf-text' | 'ocr-image' | 'ocr-pdf';
+  extractionQuality: ExtractionQuality;
+  model: string;
+  warnings: string[];
+}): AgentTrailStep[] {
+  const { context, subjectLabel, subjectAdjusted, extractionMethod, extractionQuality, model, warnings } = args;
+  const boardMeta = getBoardMeta(context.boardId);
+  const methodLabel =
+    extractionMethod === 'pdf-text'
+      ? 'typed PDF text layer'
+      : extractionMethod === 'ocr-image'
+        ? 'photo OCR (Tesseract)'
+        : 'scanned PDF OCR';
+
+  return [
+    {
+      id: 'mastra-orchestration',
+      label: 'Mastra — notes pipeline',
+      status: 'completed',
+      summary: 'Your notes ran through the Synaptiq notes workflow: read → simplify → export PDF.',
+      details: `Powered by Mastra workflow “${NOTES_WORKFLOW_ID}”: extract text → Tutor agent rewrite → PDF study sheet.`,
+    },
+    {
+      id: 'notes-extract',
+      label: 'Text extraction',
+      status: extractionQuality === 'failed' ? 'blocked' : extractionQuality === 'poor' ? 'flagged' : 'completed',
+      summary: `Read your upload via ${methodLabel} — ${EXTRACTION_LABELS[extractionQuality]}.`,
+      details:
+        extractionMethod === 'pdf-text'
+          ? 'Used the PDF text layer (fast path) — no OCR needed.'
+          : 'Tesseract OCR converted your photo or scan into text for the tutor.',
+    },
+    {
+      id: 'notes-subject',
+      label: 'Subject recognition',
+      status: 'completed',
+      summary: subjectAdjusted
+        ? `Detected ${subjectLabel} content in your upload — PDF titled for ${subjectLabel}.`
+        : `Confirmed ${subjectLabel} notes for Class ${context.classLevel}.`,
+      details: subjectAdjusted
+        ? 'Topic keywords in your notes matched this subject more closely than the chip you had selected.'
+        : 'Subject from your study setup matches the note content.',
+    },
+    {
+      id: 'notes-tutor',
+      label: 'AI Tutor — simplified & enriched your notes',
+      status: 'completed',
+      summary: `Rewrote ${subjectLabel} notes for Class ${context.classLevel} using ${friendlyModelName(model)} — added key points and examples where helpful.`,
+      details: `Aligned to ${boardMeta.label} ${boardMeta.syllabus} syllabus. Missing definitions and exam tips were filled in from curriculum reference.`,
+    },
+    {
+      id: 'notes-pdf',
+      label: 'Study sheet PDF',
+      status: 'completed',
+      summary: `Generated ${subjectLabel} study sheet — save as ${subjectLabel.replace(/\s+/g, '-')}-Class-${context.classLevel}-Study-Notes.pdf`,
+      details:
+        warnings.length > 0
+          ? `PDF ready with ${warnings.length} advisory note${warnings.length === 1 ? '' : 's'} — review flagged sections.`
+          : 'PDF includes key points, examples, and quick recap sections.',
+    },
+    {
+      id: 'final',
+      label: 'Delivered to you',
+      status: 'completed',
+      summary: 'Your simplified notes appear above — tap Save my notes to download the PDF.',
+      details: 'All notes pipeline stages completed successfully.',
     },
   ];
 }

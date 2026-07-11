@@ -12,6 +12,7 @@ import { resolveAnswerMode } from './chunk-focus.js';
 import { buildLocalReasoningSteps, detectIntent, generateLocalTutorDraft } from './local-tutor.js';
 import { tryFollowUpAnswer } from './follow-up-answer.js';
 import { trySolveStemProblem } from './stem-solve.js';
+import { isIncompleteNumericalAnswer } from './numerical-guard.js';
 import { tutorModeInstructions } from './tutor-synthesis.js';
 import { isExamQuestionRequest } from './exam-question.js';
 import { studentBoardPhrase, getBoardMeta } from '../curriculum/boards.js';
@@ -100,7 +101,7 @@ export async function generateTutorDraft(
   try {
     if (handlers.onChunk) {
       const draft = await withTimeout(
-        streamTutorDraft(prompt, handlers),
+        streamTutorDraft(prompt, handlers, doubt),
         TUTOR_LLM_TIMEOUT_MS,
         'Tutor LLM stream',
       );
@@ -119,12 +120,12 @@ export async function generateTutorDraft(
 
     const parsed = parseTutorResponse(result.text);
     logStageEnd('tutor-llm', `generate complete`);
-    return {
+    return applyNumericalGuard(doubt, {
       answer: parsed.answer,
       reasoningSteps: parsed.reasoningSteps,
       rawMathExplanation: parsed.rawMathExplanation,
       model: String(result.response?.modelId ?? 'mastra-tutor'),
-    };
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logStageWarn('tutor-llm', `failed (${msg}) — falling back to local tutor`);
@@ -135,6 +136,7 @@ export async function generateTutorDraft(
 async function streamTutorDraft(
   prompt: string,
   handlers: TutorStreamHandlers,
+  doubt: DoubtRequest,
 ): Promise<TutorDraft> {
   const stream = await tutorAgent.stream(prompt);
   const reader = stream.textStream.getReader();
@@ -155,12 +157,12 @@ async function streamTutorDraft(
   }
 
   const parsed = parseTutorResponse(fullOutput.text);
-  return {
+  return applyNumericalGuard(doubt, {
     answer: parsed.answer,
     reasoningSteps: parsed.reasoningSteps,
     rawMathExplanation: parsed.rawMathExplanation,
     model: String(fullOutput.response?.modelId ?? 'mastra-tutor'),
-  };
+  });
 }
 
 function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): string {
@@ -245,6 +247,26 @@ function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): strin
   );
 
   return blocks.join('\n');
+}
+
+function applyNumericalGuard(
+  doubt: DoubtRequest,
+  draft: TutorDraft,
+): TutorDraft {
+  if (!isIncompleteNumericalAnswer(doubt, draft.answer, draft.rawMathExplanation)) {
+    return draft;
+  }
+
+  const stem = trySolveStemProblem(doubt);
+  if (!stem) return draft;
+
+  logStageWarn('tutor-llm', 'numerical answer incomplete — using deterministic STEM solver');
+  return {
+    ...draft,
+    answer: stem.answer,
+    rawMathExplanation: stem.rawMathExplanation,
+    model: 'synaptiq-stem-solver',
+  };
 }
 
 function parseTutorResponse(raw: string): Pick<TutorDraft, 'answer' | 'reasoningSteps' | 'rawMathExplanation'> {

@@ -386,6 +386,9 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
 
   // ── Physical science ──
   if (mode === 'physical-science') {
+    const stem = trySolveStemProblem(doubt);
+    if (stem) return stem.answer;
+
     const { concept, details, closing } = buildPhysicalScienceNarrative(doubt.text, facts, classLevel);
     return formatTutorAnswer({
       title,
@@ -426,6 +429,9 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
 
   // ── Math (concept, not solve) ──
   if (mode === 'math') {
+    const stem = trySolveStemProblem(doubt);
+    if (stem) return stem.answer;
+
     const paragraphs = synthesizeNarrative(facts, classLevel, 'math');
     return formatTutorAnswer({
       title,

@@ -9,7 +9,7 @@ export function initSse(res: Response): void {
   res.flushHeaders?.();
 }
 
-export function writeSseEvent(res: Response, event: AskStreamEvent): void {
+export function writeSseEvent(res: Response, event: AskStreamEvent | Record<string, unknown>): void {
   if (res.writableEnded) return;
   res.write(`data: ${JSON.stringify(event)}\n\n`);
   const flush = (res as Response & { flush?: () => void }).flush;

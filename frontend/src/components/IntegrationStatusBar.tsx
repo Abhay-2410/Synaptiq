@@ -19,6 +19,7 @@ const TOOLTIPS: Record<string, (stack: StackHealthSnapshot) => string> = {
     `Searches ${s.qdrant.vectorCount} NCERT syllabus chunks via @mastra/qdrant`,
   Enkrypt: (s) =>
     `Live safety review before delivery (${s.enkrypt.policyName})`,
+  Groq: () => 'Groq LLM powers Tutor + Quick Check evaluator agents',
 };
 
 export function IntegrationStatusBar({ stack, compact }: IntegrationStatusBarProps) {
@@ -40,6 +41,15 @@ export function IntegrationStatusBar({ stack, compact }: IntegrationStatusBarPro
       status: stack.enkrypt.status,
       detail: stack.enkrypt.policyName,
     },
+    ...(stack.llm
+      ? [
+          {
+            label: 'Groq',
+            status: stack.llm.status === 'live' ? ('live' as const) : ('offline' as const),
+            detail: stack.llm.provider,
+          },
+        ]
+      : []),
   ];
 
   return (

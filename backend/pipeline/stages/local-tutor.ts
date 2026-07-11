@@ -15,8 +15,9 @@ export function detectIntent(question: string): Intent {
   const q = question.toLowerCase();
   if (isExamQuestionRequest(question)) return 'exam-question';
   if (/\b(difference|compare|vs|versus|distinguish)\b/.test(q)) return 'compare';
+  // "State X and solve …" — numerical solve takes priority over definition
   if (/\b(solve|find|calculate|compute|evaluate)\b/.test(q) || /[=+\-×÷^²]/.test(q)) return 'solve';
-  if (/\b(what is|what are|define|definition of)\b/.test(q)) return 'define';
+  if (/\b(state|what is|what are|define|definition of)\b/.test(q)) return 'define';
   if (/\b(explain|how does|why does|describe|how do i)\b/.test(q)) return 'explain';
   return 'general';
 }

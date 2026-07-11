@@ -57,7 +57,7 @@ const retrieveStep = createStep({
     reporter?.emit({
       type: 'status',
       stage: 'retrieval',
-      message: 'Mastra → Qdrant: searching syllabus corpus…',
+      message: 'Mastra Syllabus Retriever → syllabus-search tool → Qdrant…',
     });
 
     const retrievedChunks = (await retrieveContext(doubt)) as RetrievedChunk[];

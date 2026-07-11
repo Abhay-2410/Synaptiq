@@ -8,6 +8,7 @@ import {
   type SubjectKey,
 } from '../pipeline/curriculum/catalog.js';
 import { embedText } from '../pipeline/embeddings/embed.js';
+import { tokenizeForMatch } from '../pipeline/embeddings/query-normalize.js';
 import { chunkMatchesQuery } from '../pipeline/data/corpus/index.js';
 import { logStageEnd, logStageStart } from '../pipeline/lib/pipeline-log.js';
 import { withTimeout } from '../pipeline/lib/with-timeout.js';
@@ -80,11 +81,33 @@ function mapQueryResult(hit: {
   };
 }
 
+/** Boost Qdrant hits when syllabus topic/chapter tokens overlap the student query. */
+function lexicalRescoreHits(query: string, hits: RetrievedChunk[]): RetrievedChunk[] {
+  const queryTokens = tokenizeForMatch(query);
+  if (queryTokens.length === 0) return hits;
+
+  return hits
+    .map((hit) => {
+      const haystack = [hit.metadata.topic ?? '', hit.metadata.chapter ?? '', hit.content]
+        .filter(Boolean)
+        .join(' ');
+      const docTokens = new Set(tokenizeForMatch(haystack));
+      let overlap = 0;
+      for (const token of queryTokens) {
+        if (docTokens.has(token)) overlap++;
+      }
+      const overlapRatio = overlap / queryTokens.length;
+      const phraseMatch = chunkMatchesQuery(query, haystack);
+      const boost = overlapRatio * 0.14 + (phraseMatch ? 0.1 : 0);
+      return { ...hit, score: hit.score + boost };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
 function filterRelevantHits(query: string, hits: RetrievedChunk[]): RetrievedChunk[] {
   if (hits.length === 0) return [];
 
-  // Hash embeddings produce lower absolute scores than neural embedders — rank by score, then gate loosely.
-  const ranked = [...hits].sort((a, b) => b.score - a.score);
+  const ranked = lexicalRescoreHits(query, hits);
 
   return ranked.filter((hit, index) => {
     if (index < 3) return true;

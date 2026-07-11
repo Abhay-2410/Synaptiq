@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MathMarkdown } from './MathMarkdown';
 import type { ChatMessage } from '../types';
-import type { SubjectKey } from '../curriculum';
+import type { ClassLevel } from '../api/client';
 import { PipelineStatus } from './PipelineStatus';
 import { RawMathPanel } from './RawMathPanel';
 import { AgentTrailPanel } from './AgentTrailPanel';
@@ -11,20 +11,25 @@ import { ContextPanel } from './ContextPanel';
 import { formatStudentAnswer } from '../utils/studentAnswer';
 import { parseExamQuestionAnswer } from '../utils/examQuestions';
 import { ExamQuestionPanel } from './ExamQuestionPanel';
-import { getSubjectMeta } from '../curriculum';
+import { NotesMessageCard } from './NotesMessageCard';
+import { getSubjectMeta, type SubjectKey } from '../curriculum';
 
 interface MessageBubbleProps {
   message: ChatMessage;
   subject: SubjectKey;
+  classLevel?: ClassLevel;
   isFirstAssistant?: boolean;
   onSubmitQuickCheck: (messageId: string, answer: string) => Promise<void>;
+  onRetry?: (assistantMessageId: string) => void;
 }
 
 export function MessageBubble({
   message,
   subject,
+  classLevel = 10,
   isFirstAssistant,
   onSubmitQuickCheck,
+  onRetry,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const [showBehindTheScenes, setShowBehindTheScenes] = useState(Boolean(isFirstAssistant));
@@ -44,8 +49,9 @@ export function MessageBubble({
       })
     : message.content;
 
+  const isNotesMessage = Boolean(message.notesResult);
   const showAnswerBody =
-    !isUser && (displayAnswer || message.isStreaming);
+    !isUser && (displayAnswer || message.isStreaming || isNotesMessage);
 
   const showUserBubble = isUser && Boolean(message.content?.trim());
   const examQuestions = !isUser && displayAnswer ? parseExamQuestionAnswer(displayAnswer) : null;
@@ -67,18 +73,36 @@ export function MessageBubble({
         )}
 
         {(showAnswerBody || (isFinished && message.pipelineStage === 'error')) && (
-          <div className={`message-bubble ${examQuestions ? 'message-bubble-exam' : ''}`}>
-            <div className={message.isStreaming ? 'streaming-cursor' : ''}>
-              {examQuestions ? (
-                <ExamQuestionPanel data={examQuestions} subjectColor={subjectColor} />
-              ) : (
-                <MathMarkdown>{displayAnswer || ' '}</MathMarkdown>
-              )}
-            </div>
+          <div className={`message-bubble ${examQuestions ? 'message-bubble-exam' : ''} ${isNotesMessage ? 'message-bubble-notes' : ''}`}>
+            {isNotesMessage && message.notesResult ? (
+              <NotesMessageCard
+                result={message.notesResult}
+                fileName={message.notesFileName ?? 'your notes'}
+                subject={subject}
+                classLevel={classLevel}
+              />
+            ) : (
+              <div className={message.isStreaming ? 'streaming-cursor' : ''}>
+                {examQuestions ? (
+                  <ExamQuestionPanel data={examQuestions} subjectColor={subjectColor} />
+                ) : (
+                  <MathMarkdown>{displayAnswer || ' '}</MathMarkdown>
+                )}
+              </div>
+            )}
+            {message.pipelineStage === 'error' && onRetry && (
+              <button
+                type="button"
+                className="retry-button"
+                onClick={() => onRetry(message.id)}
+              >
+                Try again
+              </button>
+            )}
           </div>
         )}
 
-        {!isUser && isDone && (
+        {!isUser && isDone && !isNotesMessage && (
           <div className="message-extras">
             {message.verification && (
               <VerificationBadge verification={message.verification} />

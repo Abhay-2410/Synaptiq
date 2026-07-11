@@ -6,6 +6,7 @@ import { tutorAgent, TUTOR_AGENT_ID } from './tutor.agent.js';
 import { getQdrantVector } from '../integrations/qdrant-store.js';
 import { qdrantVectorId } from '../integrations/strict-config.js';
 import { DOUBT_WORKFLOW_ID, doubtWorkflow } from '../workflows/doubt.workflow.js';
+import { NOTES_WORKFLOW_ID, notesWorkflow } from '../workflows/notes.workflow.js';
 
 /**
  * Root Mastra instance — agents, Qdrant vector store, and doubt workflow.
@@ -22,11 +23,12 @@ export const mastra = new Mastra({
   },
   workflows: {
     [DOUBT_WORKFLOW_ID]: doubtWorkflow,
+    [NOTES_WORKFLOW_ID]: notesWorkflow,
   },
 });
 
 export const MASTRA_AGENT_IDS = [TUTOR_AGENT_ID, QUICK_CHECK_AGENT_ID, RETRIEVER_AGENT_ID];
-export const MASTRA_WORKFLOW_IDS = [DOUBT_WORKFLOW_ID];
+export const MASTRA_WORKFLOW_IDS = [DOUBT_WORKFLOW_ID, NOTES_WORKFLOW_ID];
 
 export {
   checkLlmProviderAtStartup,
