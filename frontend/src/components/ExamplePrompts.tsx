@@ -8,6 +8,8 @@ import {
 } from '../curriculum';
 import type { ClassLevel, StreamId } from '../api/client';
 
+const PROMPT_TILTS = [-1, 1, -1.5] as const;
+
 interface ExamplePromptsProps {
   boardId: BoardId;
   subject: SubjectKey;
@@ -50,11 +52,13 @@ export function ExamplePrompts({
           <button
             key={prompt}
             className="example-prompt note-chip"
-            style={{
-              '--subject-color': config.color,
-              '--chip-tilt': '0deg',
-              animationDelay: `${index * 60}ms`,
-            } as CSSProperties}
+            style={
+              {
+                '--subject-color': config.color,
+                '--chip-tilt': `${PROMPT_TILTS[index % PROMPT_TILTS.length]}deg`,
+                animationDelay: `${index * 60}ms`,
+              } as CSSProperties
+            }
             disabled={disabled}
             onClick={() => onSelect(prompt)}
           >

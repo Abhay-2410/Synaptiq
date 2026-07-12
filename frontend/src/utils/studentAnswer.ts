@@ -1,7 +1,7 @@
 /** Strip internal / developer-facing copy before showing answers to students. */
 export function formatStudentAnswer(
   content: string,
-  options?: { hasStepByStep?: boolean; hasRetrievedMaterial?: boolean },
+  options?: { hasStepByStep?: boolean; hasRetrievedMaterial?: boolean; hasQuickCheck?: boolean },
 ): string {
   let text = content.trim();
   if (!text) return text;
@@ -14,6 +14,12 @@ export function formatStudentAnswer(
     text = text.replace(/If you retry with clearer wording[^\n]*/gi, '');
     // Legacy: strip duplicated step-by-step block when shown in the panel below
     text = text.replace(/\n### Step-by-step working[\s\S]*$/i, '').trim();
+  }
+
+  if (options?.hasQuickCheck) {
+    text = text.replace(/\*Quick check:\*[^*]+\*/gi, '');
+    text = text.replace(/\*Quick check:[^*]+\*/gi, '');
+    text = text.replace(/(?:^|\n)\*?Quick check:\*?\s*[^\n]+/gi, '');
   }
 
   text = text.replace(/Enkrypt note:[^\n]*/gi, '');

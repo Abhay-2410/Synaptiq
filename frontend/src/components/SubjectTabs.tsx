@@ -8,6 +8,7 @@ import {
   type SubjectKey,
 } from '../curriculum';
 import type { MasteryState } from '../types';
+import { StickyNoteButton } from './StickyNoteButton';
 
 interface SubjectTabsProps {
   boardId: BoardId;
@@ -22,12 +23,14 @@ interface SubjectTabsProps {
 
 function SubjectButton({
   subjectKey,
+  index,
   active,
   mastery,
   onSelect,
   disabled,
 }: {
   subjectKey: SubjectKey;
+  index: number;
   active: boolean;
   mastery?: MasteryState;
   onSelect: (id: SubjectKey) => void;
@@ -37,21 +40,23 @@ function SubjectButton({
   const fill = mastery?.score ?? 0;
 
   return (
-    <button
-      type="button"
-      className={`subject-tab ${active ? 'active' : ''}`}
+    <StickyNoteButton
+      noteId={subjectKey}
+      index={index}
+      color={subject.color}
+      active={active}
       disabled={disabled}
+      className="subject-tab"
+      title={subject.label}
+      onClick={() => onSelect(subjectKey)}
       style={
         {
-          '--subject-color': subject.color,
           '--mastery-fill': `${fill}%`,
         } as CSSProperties
       }
-      onClick={() => onSelect(subjectKey)}
-      title={subject.label}
     >
       <span className="subject-tab-label">{subject.label}</span>
-    </button>
+    </StickyNoteButton>
   );
 }
 
@@ -72,10 +77,11 @@ export function SubjectTabs({
   if (!useGroups) {
     return (
       <nav className="subject-tabs" aria-label="Subjects">
-        {subjects.map((key) => (
+        {subjects.map((key, index) => (
           <SubjectButton
             key={key}
             subjectKey={key}
+            index={index}
             active={key === selected}
             mastery={masteryBySubject[key]}
             onSelect={onSelect}
@@ -85,6 +91,8 @@ export function SubjectTabs({
       </nav>
     );
   }
+
+  let noteIndex = 0;
 
   return (
     <nav className="subject-tabs grouped" aria-label="All subjects">
@@ -102,16 +110,21 @@ export function SubjectTabs({
         return (
           <div key={group.label} className="subject-group">
             <div className="subject-group-label">{group.label}</div>
-            {keys.map((key) => (
-              <SubjectButton
-                key={key}
-                subjectKey={key}
-                active={key === selected}
-                mastery={masteryBySubject[key]}
-                onSelect={onSelect}
-                disabled={disabled}
-              />
-            ))}
+            {keys.map((key) => {
+              const currentIndex = noteIndex;
+              noteIndex += 1;
+              return (
+                <SubjectButton
+                  key={key}
+                  subjectKey={key}
+                  index={currentIndex}
+                  active={key === selected}
+                  mastery={masteryBySubject[key]}
+                  onSelect={onSelect}
+                  disabled={disabled}
+                />
+              );
+            })}
           </div>
         );
       })}

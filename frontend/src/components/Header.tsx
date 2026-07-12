@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { checkHealth } from '../api/client';
 import { IntegrationStatusBar } from './IntegrationStatusBar';
+import { SynaptiqLogo } from './SynaptiqLogo';
 import type { StackHealthSnapshot } from '../types';
 
 export function Header() {
@@ -37,7 +38,7 @@ export function Header() {
     <header className="header">
       <div className="header-brand">
         <div className="header-logo" aria-hidden="true">
-          ✦
+          <SynaptiqLogo size={38} />
         </div>
         <div>
           <div className="header-title">Synaptiq</div>

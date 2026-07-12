@@ -5,9 +5,10 @@ import { withTimeout } from '../../pipeline/lib/with-timeout.js';
 import { requireLiveEnkrypt } from '../../integrations/strict-config.js';
 
 const USE_STUB = process.env.USE_ENKRYPT_STUB === 'true';
-const ENKRYPT_PER_CALL_TIMEOUT_MS = Number(process.env.ENKRYPT_PER_CALL_TIMEOUT_MS) || 8_000;
-const ENKRYPT_TOTAL_TIMEOUT_MS = Number(process.env.ENKRYPT_TIMEOUT_MS) || 35_000;
+const ENKRYPT_PER_CALL_TIMEOUT_MS = Number(process.env.ENKRYPT_PER_CALL_TIMEOUT_MS) || 12_000;
+const ENKRYPT_TOTAL_TIMEOUT_MS = Number(process.env.ENKRYPT_TIMEOUT_MS) || 60_000;
 const ENKRYPT_POLICY_NAME = process.env.ENKRYPT_POLICY_NAME ?? 'synaptiq-tutor-v1';
+const ENKRYPT_CALL_STAGGER_MS = Number(process.env.ENKRYPT_CALL_STAGGER_MS) || 300;
 
 /**
  * Enkrypt verification — mandatory pipeline stage before student delivery.
@@ -156,12 +157,28 @@ interface DetectSummary {
   };
 }
 
+function retryDelayMs(res: Response, attempt: number): number {
+  const retryAfter = res.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+    const retryAt = Date.parse(retryAfter);
+    if (!Number.isNaN(retryAt)) return Math.max(0, retryAt - Date.now());
+  }
+  return 2_000 * 2 ** (attempt - 1);
+}
+
 async function callEnkryptGuardrail(
   baseUrl: string,
   path: string,
   headers: Record<string, string>,
   body: unknown,
+  staggerMs = 0,
 ): Promise<Response> {
+  if (staggerMs > 0) {
+    await new Promise((r) => setTimeout(r, staggerMs));
+  }
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     const res = await fetchWithTimeout(
       `${baseUrl}${path}`,
@@ -170,7 +187,7 @@ async function callEnkryptGuardrail(
     );
     if (res.ok) return res;
     if (res.status !== 429 && res.status !== 503) return res;
-    if (attempt < 3) await new Promise((r) => setTimeout(r, 1200 * attempt));
+    if (attempt < 3) await new Promise((r) => setTimeout(r, retryDelayMs(res, attempt)));
   }
   return fetchWithTimeout(
     `${baseUrl}${path}`,
@@ -196,26 +213,36 @@ async function callEnkryptApi(input: VerificationInput): Promise<VerificationRes
     apikey: apiKey,
   };
 
-  const hallucinationRes = await callEnkryptGuardrail(baseUrl, '/guardrails/hallucination', headers, {
+  const hallucinationBody = {
     request_text: input.doubt,
     response_text: input.draft.answer,
     context: contextText,
-  });
-  await new Promise((r) => setTimeout(r, 400));
-  const adherenceRes = await callEnkryptGuardrail(baseUrl, '/guardrails/adherence', headers, {
+  };
+  const adherenceBody = hallucinationBody;
+  const detectBody = { text: input.draft.answer };
+  const relevancyBody = {
     request_text: input.doubt,
     response_text: input.draft.answer,
-    context: contextText,
-  });
-  await new Promise((r) => setTimeout(r, 400));
-  const detectRes = await callEnkryptGuardrail(baseUrl, '/guardrails/detect', headers, {
-    text: input.draft.answer,
-  });
-  await new Promise((r) => setTimeout(r, 400));
-  const relevancyRes = await callEnkryptGuardrail(baseUrl, '/guardrails/relevancy', headers, {
-    request_text: input.doubt,
-    response_text: input.draft.answer,
-  });
+  };
+
+  const [hallucinationRes, adherenceRes, detectRes, relevancyRes] = await Promise.all([
+    callEnkryptGuardrail(baseUrl, '/guardrails/hallucination', headers, hallucinationBody, 0),
+    callEnkryptGuardrail(
+      baseUrl,
+      '/guardrails/adherence',
+      headers,
+      adherenceBody,
+      ENKRYPT_CALL_STAGGER_MS,
+    ),
+    callEnkryptGuardrail(baseUrl, '/guardrails/detect', headers, detectBody, ENKRYPT_CALL_STAGGER_MS * 2),
+    callEnkryptGuardrail(
+      baseUrl,
+      '/guardrails/relevancy',
+      headers,
+      relevancyBody,
+      ENKRYPT_CALL_STAGGER_MS * 3,
+    ),
+  ]);
 
   async function safeJson(res: Response): Promise<Record<string, unknown>> {
     if (!res.ok) return {};

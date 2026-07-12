@@ -237,7 +237,7 @@ function buildHistoryNarrative(
     body.push(`${cv.connective}, ${paraphrased[1]!.charAt(0).toLowerCase()}${paraphrased[1]!.slice(1)}`);
   }
   if (paraphrased.length >= 3) {
-    body.push(paraphrased.slice(2).join(' '));
+    body.push(...paraphrased.slice(2));
   }
 
   const closing = buildClosing('social-studies', doubt, classLevel, discipline ?? 'History');
@@ -357,8 +357,16 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
                 heading: 'Why this matters',
                 paragraphs: [
                   discipline === 'Geography'
-                    ? 'Understanding this helps you explain patterns on a map and connect them to people\'s lives—not just name categories from the textbook.'
-                    : 'In the exam, marks come from showing how one development led to the next, not from copying a list of headings from your notes.',
+                    ? 'Understanding this helps you explain patterns on a map and connect them to people\'s lives — not just name categories from the textbook. In map-based questions, always link the physical feature to human activity (farming, trade, settlement).'
+                    : 'In the exam, marks come from showing how one development led to the next, not from copying a list of headings from your notes. Practice writing one paragraph that chains cause → event → consequence.',
+                ],
+              },
+              {
+                heading: 'Common exam mistake',
+                paragraphs: [
+                  discipline === 'Geography'
+                    ? 'Students often list features without explaining the process — always say *how* and *why* the pattern forms, not just *what* it is called.'
+                    : 'Students often dump dates without explaining significance — always answer "so what?" after naming an event or leader.',
                 ],
               },
             ]
@@ -371,14 +379,30 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
   // ── Life science ──
   if (mode === 'life-science') {
     const { plain, mechanism, closing } = buildLifeScienceNarrative(doubt.text, facts, classLevel);
+    const keyTerms =
+      mechanism.length >= 2
+        ? [
+            'Keep these terms straight in your notes — examiners often test whether you can use them in the right order:',
+            mechanism.slice(-2).join(' '),
+          ]
+        : [];
     return formatTutorAnswer({
       title,
       sections: [
         { heading: 'In plain words', paragraphs: [plain] },
         {
-          heading: 'How it works',
-          paragraphs: mechanism.length > 0 ? mechanism : ['Each step builds on the previous one—follow the order carefully when you draw or label diagrams.'],
+          heading: 'How it works — step by step',
+          paragraphs:
+            mechanism.length > 0
+              ? mechanism
+              : [
+                  'Each step builds on the previous one — follow the order carefully when you draw or label diagrams.',
+                  'Ask yourself at each step: what goes in, what changes, and what comes out?',
+                ],
         },
+        ...(keyTerms.length > 0
+          ? [{ heading: 'Key terms to remember', paragraphs: keyTerms }]
+          : []),
       ],
       closing,
     });
@@ -390,10 +414,22 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
     return formatTutorAnswer({
       title,
       sections: [
-        { heading: 'The idea', paragraphs: [concept] },
+        { heading: 'The idea — in plain words', paragraphs: [concept] },
         {
           heading: 'What you need to know',
-          paragraphs: details.length > 0 ? details : ['Focus on the quantities involved and the units—CBSE often tests whether you can set up the relationship correctly.'],
+          paragraphs:
+            details.length > 0
+              ? details
+              : [
+                  'Focus on the quantities involved and the units — CBSE often tests whether you can set up the relationship correctly.',
+                  'Write the formula, label each symbol, and check units before substituting numbers.',
+                ],
+        },
+        {
+          heading: 'How to use this in problems',
+          paragraphs: [
+            'Read the question for what is given and what is asked. Pick the right formula, substitute with consistent units, and state the final answer with the correct unit.',
+          ],
         },
       ],
       closing,
@@ -456,6 +492,23 @@ export function synthesizeTutorAnswer(input: SynthesisInput): string {
   });
 }
 
+/** Shared depth guidance appended to all mode instructions. */
+function answerDepthBlock(classLevel?: number): string {
+  const cv = classVoice(classLevel);
+  const wordTarget =
+    cv.label === 'younger'
+      ? '200–350 words'
+      : cv.label === 'middle'
+        ? '300–450 words'
+        : '350–550 words';
+  return [
+    'DEPTH TARGET: Write a thorough tutor explanation (~' + wordTarget + ' for conceptual questions).',
+    'Structure: (1) plain-language direct answer, (2) developed explanation with specifics, (3) example/analogy, (4) exam tip or common mistake if useful.',
+    'Use ### subheadings when the answer has multiple distinct parts.',
+    'Every paragraph must teach something new — depth through substance, not repetition.',
+  ].join('\n');
+}
+
 /** Mode-specific instructions appended to LLM tutor prompts. */
 export function tutorModeInstructions(
   mode: AnswerMode,
@@ -465,10 +518,12 @@ export function tutorModeInstructions(
   const cv = classVoice(classLevel);
   const depth =
     cv.label === 'younger'
-      ? 'Use simple vocabulary and one everyday analogy where it helps.'
+      ? 'Use simple vocabulary and one everyday analogy. Short sentences, but cover every important point — do not shorten into a summary.'
       : cv.label === 'middle'
-        ? 'Use clear exam-appropriate language for Class 9–10.'
-        : 'Use precise terminology and assume prior chapters are known.';
+        ? 'Use clear exam-appropriate language for Class 9–10. Enough detail to score well on 3–5 mark questions.'
+        : 'Use precise terminology and assume prior chapters are known. Include connections, nuance, and syllabus-level detail.';
+
+  const depthBlock = answerDepthBlock(classLevel);
 
   const antiEcho =
     'CRITICAL: Retrieved context is reference only. NEVER repeat chunk titles/headings verbatim. Synthesize into original tutor prose.';
@@ -482,21 +537,21 @@ export function tutorModeInstructions(
 
   switch (mode) {
     case 'social-studies':
-      return `${antiEcho}\n${antiFiller}\nNARRATIVE MODE: Write cause → event → consequence with specific dates and names. Flowing paragraphs only — NOT a bullet index of facts. ${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${depthBlock}\nNARRATIVE MODE: Write cause → event → consequence with specific dates and names. Explain WHY each development mattered. Flowing paragraphs with ### subheadings — NOT a bullet index of facts. ${depth}`;
     case 'life-science':
-      return `${antiEcho}\n${antiFiller}\nMECHANISM MODE: Plain-language explanation first, then process steps with a real example/analogy. Never restate the question as the answer. ${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${depthBlock}\nMECHANISM MODE: Plain-language overview first, then step-by-step process (each step = what happens + why), then key terms, then a real example/analogy. Never restate the question as the answer. ${depth}`;
     case 'physical-science':
       return intent === 'compare'
-        ? `${antiEcho}\n${antiFiller}\n${compareNote}\nCONCEPTUAL PHYSICS MODE: Define each term, state formulas ($W=Fs$, $KE=\\frac{1}{2}mv^2$, etc.) with SI units, then compare in a table. ${depth}`
-        : `${antiEcho}\n${antiFiller}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
+        ? `${antiEcho}\n${antiFiller}\n${depthBlock}\n${compareNote}\nCONCEPTUAL PHYSICS MODE: Define each term, state formulas ($W=Fs$, $KE=\\frac{1}{2}mv^2$, etc.) with SI units, worked mini-example, then compare in a table. ${depth}`
+        : `${antiEcho}\n${antiFiller}\n${depthBlock}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. Also explain the concept in prose before or after the calculation. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
     case 'math':
-      return `${antiEcho}\n${antiFiller}\n${compareNote}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${depthBlock}\n${compareNote}\nQUANTITATIVE MODE: Show the FULL worked solution — real numbers, real substitutions, real final answer at every step. For concept questions, explain the method and WHY each step works before calculating. Use $...$ LaTeX. Put line-by-line work in [[RAW_MATH]]. Each step explanation must name the exact operation (e.g. "Divide both sides by 3") — never vague labels like "Simplifying" alone. ${depth}`;
     case 'commerce':
-      return `${antiEcho}\n${antiFiller}\nCOMMERCE MODE: Definitions in full sentences PLUS worked examples (journal entries, numerical problems, business scenarios) with real figures. ${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${depthBlock}\nCOMMERCE MODE: Definitions in full sentences PLUS worked examples (journal entries, numerical problems, business scenarios) with real figures. Explain the logic behind each entry or calculation. ${depth}`;
     case 'english':
-      return `${antiEcho}\n${antiFiller}\nENGLISH MODE: State the rule, then 2–3 correct example sentences (and incorrect contrast if useful). ${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${depthBlock}\nENGLISH MODE: State the rule in plain words, explain why it exists, then 2–3 correct example sentences and 1 incorrect contrast. For literature, quote or reference specific textual detail. ${depth}`;
     default:
-      return `${antiEcho}\n${antiFiller}\n${depth}`;
+      return `${antiEcho}\n${antiFiller}\n${depthBlock}\n${depth}`;
   }
 }
 

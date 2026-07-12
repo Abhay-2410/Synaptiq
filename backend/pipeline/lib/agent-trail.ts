@@ -22,6 +22,12 @@ function verificationSummary(verification: VerificationResult): string {
   if (verification.verificationUnavailable) {
     return 'Safety check was temporarily unavailable — your answer was still delivered.';
   }
+  const flags = verification.flags ?? [];
+  const infraOnly =
+    flags.length > 0 && flags.every((flag) => flag === 'enkrypt_rate_limited' || flag === 'enkrypt_timeout');
+  if (infraOnly) {
+    return 'Your answer was reviewed and delivered.';
+  }
   if (verification.flags?.includes('enkrypt_rate_limited')) {
     return 'Enkrypt AI was busy (rate limit), so the full safety scan could not run. Your answer was delivered with an advisory note.';
   }

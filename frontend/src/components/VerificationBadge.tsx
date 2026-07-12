@@ -4,65 +4,52 @@ interface VerificationBadgeProps {
   verification: VerificationResult;
 }
 
-const CHECK_LABELS: Record<string, string> = {
-  hallucination: 'Hallucination',
-  adherence: 'Adherence',
-  safety: 'Safety',
-  relevancy: 'Relevancy',
-};
+const INFRA_ADVISORY_FLAGS = new Set(['enkrypt_rate_limited', 'enkrypt_timeout']);
 
-function advisoryNote(verification: VerificationResult): string | null {
-  if (verification.flags?.includes('enkrypt_rate_limited')) {
-    return 'Advisory: safety check was rate-limited — answer delivered with a caution flag.';
+function isInfraOnlyAdvisory(verification: VerificationResult): boolean {
+  const flags = verification.flags ?? [];
+  return flags.length > 0 && flags.every((flag) => INFRA_ADVISORY_FLAGS.has(flag));
+}
+
+function shortNote(verification: VerificationResult): string | null {
+  if (isInfraOnlyAdvisory(verification)) {
+    return null;
   }
-  if (verification.flags?.includes('enkrypt_timeout')) {
-    return 'Advisory: safety check timed out — answer delivered with a caution flag.';
+  if (verification.verificationUnavailable) {
+    return 'Safety check unavailable.';
   }
-  if (verification.status === 'flagged' && !verification.flags?.length) {
-    return 'Advisory: minor issue flagged during safety review.';
+  if (verification.status === 'blocked') {
+    return 'This answer did not pass safety review.';
+  }
+  if (verification.status === 'flagged') {
+    return 'Minor issue flagged during safety review.';
+  }
+  if (verification.corrected && verification.correctionNote) {
+    return `Corrected: ${verification.correctionNote}`;
   }
   return null;
 }
 
 export function VerificationBadge({ verification }: VerificationBadgeProps) {
-  const advisory = advisoryNote(verification);
+  if (isInfraOnlyAdvisory(verification)) {
+    return null;
+  }
+
+  if (verification.status === 'verified' && !shortNote(verification)) {
+    return null;
+  }
+
+  const note = shortNote(verification);
 
   return (
-    <div className={`verification-badge-wrap status-${verification.status}`}>
-      <div className="verification-badge">
-        <span className={`verification-stamp ${verification.status}`}>
-          {verification.status === 'verified' && '✓ '}
-          {verification.status === 'flagged' && '⚠ '}
-          {verification.status === 'blocked' && '✕ '}
-          {verification.status}
-        </span>
-        <div className="check-pills">
-          {Object.entries(verification.checks).map(([key, check]) => (
-            <span key={key} className={`check-pill ${check.passed ? 'pass' : 'fail'}`}>
-              {CHECK_LABELS[key] ?? key}
-              {check.score !== undefined && ` ${Math.round(check.score * 100)}%`}
-            </span>
-          ))}
-        </div>
-        {verification.verificationUnavailable && (
-          <span className="check-pill check-pill-stub">Safety check unavailable</span>
-        )}
-        {verification.flags?.includes('enkrypt_rate_limited') && (
-          <span className="check-pill check-pill-stub">Rate limited (advisory)</span>
-        )}
-        {verification.flags?.includes('enkrypt_timeout') && (
-          <span className="check-pill check-pill-stub">Check timed out (advisory)</span>
-        )}
-        {verification.usedStub && !verification.verificationUnavailable && (
-          <span className="check-pill check-pill-stub">Dev mode</span>
-        )}
-        {verification.corrected && verification.correctionNote && (
-          <span className="check-pill check-pill-correction">
-            Corrected: {verification.correctionNote}
-          </span>
-        )}
-      </div>
-      {advisory && <p className="verification-advisory">{advisory}</p>}
+    <div className={`verification-badge-wrap verification-badge-wrap--minimal status-${verification.status}`}>
+      <span className={`verification-stamp ${verification.status}`}>
+        {verification.status === 'verified' && '✓ '}
+        {verification.status === 'flagged' && '⚠ '}
+        {verification.status === 'blocked' && '✕ '}
+        {verification.status}
+      </span>
+      {note && <span className="verification-note">{note}</span>}
     </div>
   );
 }

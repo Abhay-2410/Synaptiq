@@ -41,6 +41,7 @@ export function MessageBubble({
     ? formatStudentAnswer(message.content, {
         hasStepByStep: hasSteps,
         hasRetrievedMaterial: hasMaterial,
+        hasQuickCheck: Boolean(message.quickCheckSession),
       })
     : message.content;
 

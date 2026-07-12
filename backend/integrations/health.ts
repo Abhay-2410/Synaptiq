@@ -30,8 +30,11 @@ export interface StackHealthStatus {
 }
 
 const ENKRYPT_PROBE_TIMEOUT_MS = Number(process.env.ENKRYPT_PROBE_TIMEOUT_MS) || 5_000;
+const ENKRYPT_PROBE_CACHE_MS = Number(process.env.ENKRYPT_PROBE_CACHE_MS) || 45_000;
 
-async function probeEnkryptLive(): Promise<{ live: boolean; error?: string }> {
+let enkryptProbeCache: { result: { live: boolean; error?: string }; expiresAt: number } | null = null;
+
+async function probeEnkryptLiveUncached(): Promise<{ live: boolean; error?: string }> {
   const apiKey = process.env.ENKRYPTAI_API_KEY?.trim();
   if (!apiKey) {
     return { live: false, error: 'ENKRYPTAI_API_KEY not set' };
@@ -75,7 +78,27 @@ async function probeEnkryptLive(): Promise<{ live: boolean; error?: string }> {
   return { live: false, error: 'Enkrypt unreachable' };
 }
 
-export async function checkStackHealth(agentIds: string[], workflowIds: string[]): Promise<StackHealthStatus> {
+async function probeEnkryptLive(force = false): Promise<{ live: boolean; error?: string }> {
+  const now = Date.now();
+  if (!force && enkryptProbeCache && enkryptProbeCache.expiresAt > now) {
+    return enkryptProbeCache.result;
+  }
+
+  const result = await probeEnkryptLiveUncached();
+  enkryptProbeCache = { result, expiresAt: now + ENKRYPT_PROBE_CACHE_MS };
+  return result;
+}
+
+export interface CheckStackHealthOptions {
+  /** Bypass cached Enkrypt probe (used at server startup). */
+  forceEnkryptProbe?: boolean;
+}
+
+export async function checkStackHealth(
+  agentIds: string[],
+  workflowIds: string[],
+  options: CheckStackHealthOptions = {},
+): Promise<StackHealthStatus> {
   const warnings: string[] = [];
   const strict = isStrictStackMode();
 
@@ -100,7 +123,7 @@ export async function checkStackHealth(agentIds: string[], workflowIds: string[]
       warnings.push('Enkrypt is in stub mode — set USE_ENKRYPT_STUB=false and ENKRYPTAI_API_KEY for live guardrails');
     }
   } else {
-    const probe = await probeEnkryptLive();
+    const probe = await probeEnkryptLive(options.forceEnkryptProbe === true);
     if (probe.live) {
       enkryptStatus = 'live';
     } else {
@@ -159,7 +182,7 @@ export async function logStackHealthAtStartup(
   agentIds: string[],
   workflowIds: string[],
 ): Promise<StackHealthStatus> {
-  const health = await checkStackHealth(agentIds, workflowIds);
+  const health = await checkStackHealth(agentIds, workflowIds, { forceEnkryptProbe: true });
 
   console.log('\n[synaptiq] ── Sponsor stack health ──');
   console.log(`  Mastra     agents=[${health.mastra.agents.join(', ')}] workflows=[${health.mastra.workflows.join(', ')}]`);

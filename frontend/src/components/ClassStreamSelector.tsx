@@ -1,9 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
 import type { ClassLevel, StreamId } from '../api/client';
+import { StickyNoteButton } from './StickyNoteButton';
 
 const CLASS_OPTIONS: ClassLevel[] = [6, 7, 8, 9, 10, 11, 12];
 const STREAM_OPTIONS: StreamId[] = ['pcm', 'pcb', 'commerce', 'humanities'];
+
+const CLASS_COLORS: Record<ClassLevel, string> = {
+  6: '#E8D66B',
+  7: '#6FBF9E',
+  8: '#C4A484',
+  9: '#E8A87C',
+  10: '#F2795B',
+  11: '#9B8EC4',
+  12: '#7FA8C9',
+};
+
+const STREAM_COLORS: Record<StreamId, string> = {
+  pcm: '#E8D66B',
+  pcb: '#6FBF9E',
+  commerce: '#F2795B',
+  humanities: '#C4866A',
+};
 
 function streamLabel(id: StreamId) {
   switch (id) {
@@ -32,16 +48,6 @@ export function ClassStreamSelector({
   disabled?: boolean;
 }) {
   const showStream = classLevel >= 11;
-  const [settleTick, setSettleTick] = useState(0);
-
-  useEffect(() => {
-    // tiny state bump to trigger CSS settle animation in a controlled way
-    setSettleTick((t) => t + 1);
-  }, [classLevel, streamId]);
-
-  const tiltClass = useMemo(() => {
-    return settleTick % 2 === 0 ? 'chip-settle' : 'chip-settle alt';
-  }, [settleTick]);
 
   return (
     <div className="class-strip">
@@ -50,23 +56,21 @@ export function ClassStreamSelector({
       </div>
 
       <div className="class-options">
-        {CLASS_OPTIONS.map((c) => {
+        {CLASS_OPTIONS.map((c, index) => {
           const active = c === classLevel;
           return (
-            <button
+            <StickyNoteButton
               key={c}
-              type="button"
-              className={`class-tab note-chip ${active ? 'active' : ''} ${tiltClass}`}
+              noteId={`class-${c}`}
+              index={index}
+              color={CLASS_COLORS[c]}
+              active={active}
               disabled={disabled}
-              style={
-                {
-                  '--subject-color': active ? '#E8D66B' : 'rgba(232, 214, 107, 0.25)',
-                } as CSSProperties
-              }
+              className="class-tab"
               onClick={() => onClassChange(c)}
             >
-              {c}
-            </button>
+              <span className="class-tab-label">{c}</span>
+            </StickyNoteButton>
           );
         })}
       </div>
@@ -77,23 +81,21 @@ export function ClassStreamSelector({
             <span className="selector-accent">My stream</span>
           </div>
           <div className="stream-options">
-            {STREAM_OPTIONS.map((s) => {
+            {STREAM_OPTIONS.map((s, index) => {
               const active = s === streamId;
               return (
-                <button
+                <StickyNoteButton
                   key={s}
-                  type="button"
-                  className={`stream-tab note-chip ${active ? 'active' : ''}`}
+                  noteId={`stream-${s}`}
+                  index={index}
+                  color={STREAM_COLORS[s]}
+                  active={active}
                   disabled={disabled}
-                  style={
-                    {
-                      '--subject-color': active ? '#F2795B' : 'rgba(242, 121, 91, 0.25)',
-                    } as CSSProperties
-                  }
+                  className="stream-tab"
                   onClick={() => onStreamChange(s)}
                 >
-                  {streamLabel(s)}
-                </button>
+                  <span className="stream-tab-label">{streamLabel(s)}</span>
+                </StickyNoteButton>
               );
             })}
           </div>
@@ -102,4 +104,3 @@ export function ClassStreamSelector({
     </div>
   );
 }
-

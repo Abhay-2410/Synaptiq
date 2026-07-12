@@ -1,6 +1,8 @@
-import type { CSSProperties } from 'react';
 import type { BoardId } from '../curriculum';
 import { BOARD_META } from '../curriculum';
+import { StickyNoteButton } from './StickyNoteButton';
+
+const BOARD_COLOR = '#E8D66B';
 
 export function BoardSelector({
   boardId,
@@ -17,26 +19,24 @@ export function BoardSelector({
         <span className="selector-accent">Board</span>
       </div>
       <div className="board-options">
-        {(['cbse', 'icse'] as BoardId[]).map((board) => {
+        {(['cbse', 'icse'] as BoardId[]).map((board, index) => {
           const meta = BOARD_META[board];
           const active = board === boardId;
           return (
-            <button
+            <StickyNoteButton
               key={board}
-              type="button"
-              className={`board-tab note-chip ${active ? 'active' : ''}`}
+              noteId={board}
+              index={index}
+              color={BOARD_COLOR}
+              active={active}
               disabled={disabled}
+              className="board-tab"
               title={`${meta.label} — ${meta.syllabus} syllabus`}
-              style={
-                {
-                  '--subject-color': active ? '#E8D66B' : 'rgba(232, 214, 107, 0.25)',
-                } as CSSProperties
-              }
               onClick={() => onBoardChange(board)}
             >
               <span className="board-tab-label">{meta.label}</span>
               <span className="board-tab-sub">{meta.syllabus}</span>
-            </button>
+            </StickyNoteButton>
           );
         })}
       </div>

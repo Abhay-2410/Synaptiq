@@ -15,6 +15,7 @@ import { ensureQdrantCollection } from '../integrations/qdrant-store.js';
 import { askRouter } from './routes/ask.js';
 import { learnRouter } from './routes/learn.js';
 import { verifyRouter } from './routes/verify.js';
+import { notesRouter } from './routes/notes.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -54,6 +55,7 @@ app.get('/', (_req, res) => {
       <li><a href="/health">GET /health</a> — live stack status (Mastra + Qdrant + Enkrypt)</li>
       <li><code>POST /ask</code> — submit a student doubt (SSE or JSON)</li>
       <li><code>POST /learn/check</code> — Quick Challenge evaluation</li>
+      <li><code>POST /notes/simplify</code> — Fix my notes (photo/PDF → study sheet)</li>
       <li><code>POST /internal/verify</code> — Enkrypt verification stage</li>
       <li><code>GET /api/agents</code> — Mastra agents</li>
     </ul>
@@ -80,6 +82,7 @@ app.get('/health', async (_req, res) => {
 
 app.use('/ask', askRouter);
 app.use('/learn', learnRouter);
+app.use('/notes', notesRouter);
 app.use('/internal/verify', verifyRouter);
 
 const server = new MastraServer({ app, mastra });
@@ -100,5 +103,6 @@ app.listen(PORT, () => {
   console.log('  GET  /health            — Mastra + Qdrant + Enkrypt live status');
   console.log('  POST /ask               — Mastra workflow doubt pipeline');
   console.log('  POST /learn/check       — Quick Challenge (Mastra evaluator agent)');
+  console.log('  POST /notes/simplify    — Fix my notes pipeline');
   console.log('  POST /internal/verify   — Enkrypt verification');
 });

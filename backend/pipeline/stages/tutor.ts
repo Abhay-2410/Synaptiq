@@ -225,11 +225,20 @@ function buildTutorPrompt(doubt: DoubtRequest, context: RetrievedChunk[]): strin
     blocks.push(
       'REQUEST TYPE: COMPARE / DIFFERENCE',
       'Structure [[ANSWER]] with markdown headings:',
-      '- ### First concept — definition + formula (if any) + unit',
-      '- ### Second concept — definition + formula (if any) + unit',
+      '- ### First concept — definition + formula (if any) + unit + one example',
+      '- ### Second concept — definition + formula (if any) + unit + one example',
       '- ### Key differences — precise bullet or table (aspect | first | second)',
       '- ### One short worked example tying both together',
+      '- ### When to use which — exam tip on how boards test this comparison',
       'Answer the comparison directly — no vague analogies without definitions.',
+      '',
+    );
+  } else if (intent === 'define' || intent === 'explain' || intent === 'general') {
+    blocks.push(
+      'REQUEST TYPE: TEACH / EXPLAIN',
+      'The student wants a thorough, understandable explanation — not a short summary.',
+      'In [[ANSWER]], use ### subheadings and write enough detail that they could explain this topic to a friend afterward.',
+      'Include: direct answer → developed explanation → concrete example → exam tip or common mistake (if useful).',
       '',
     );
   }
